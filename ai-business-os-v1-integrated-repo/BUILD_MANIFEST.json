@@ -1,0 +1,14 @@
+{
+  "name": "AI Business OS v1 Integrated Repository",
+  "generated_at": "2026-08-10T09:28:39.530405+00:00",
+  "python_compile": "PASS",
+  "integrated_validation_packs": [
+    "hp02_initial",
+    "hp02_rc5_ready",
+    "hp03_security",
+    "hp04_upgrade",
+    "ga_bundle",
+    "live_validation"
+  ],
+  "note": "Runnable EC2/Docker Compose baseline plus currently available validation artifacts."
+}
