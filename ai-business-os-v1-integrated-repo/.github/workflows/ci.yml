@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test and Container Security
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build application image
+        run: docker build -t aios-ci-test .
+
+      - name: Run regression tests
+        run: |
+          docker run --rm \
+            --entrypoint python \
+            aios-ci-test \
+            -m pytest -q -o cache_dir=/tmp/pytest_cache
+
+      - name: Verify production env is absent from image
+        run: |
+          docker run --rm \
+            --entrypoint sh \
+            aios-ci-test \
+            -c 'test ! -e /app/.env'
+
+      - name: Verify env template is retained
+        run: |
+          docker run --rm \
+            --entrypoint sh \
+            aios-ci-test \
+            -c 'test -f /app/.env.example'
+
+      - name: Prepare CI environment
+        run: |
+          cp .env.example .env
+          chmod 600 .env
+
+      - name: Validate Compose contract
+        run: docker compose config --quiet
+
+      - name: Reject tracked runtime secrets
+        run: |
+          if git ls-files | grep -E '(^|/)\.env$|(^|/)\.env\.backup|(^|/)\.env\.pre-ga|\.pem$|(^|/)backups/.*\.dump$'; then
+            echo "ERROR: runtime secret or backup artifact is tracked"
+            exit 1
+          fi
