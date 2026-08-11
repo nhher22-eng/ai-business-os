@@ -1,0 +1,10 @@
+.env
+.env.*
+!.env.example
+backups/
+*.dump
+*.dump.sha256
+*.pem
+.git/
+__pycache__/
+*.pyc
