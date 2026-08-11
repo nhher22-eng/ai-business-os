@@ -12,3 +12,6 @@ evidence/
 .env.pre-ga-*
 backups/
 *.rc5-backup
+
+# Local production deployment artifacts
+*.pre-edge-backup
