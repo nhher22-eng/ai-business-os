@@ -13,6 +13,9 @@ jobs:
   test:
     name: Test and Container Security
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ai-business-os-v1-integrated-repo
 
     steps:
       - name: Checkout
