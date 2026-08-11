@@ -1,0 +1,9 @@
+[Unit]
+OnFailure=aios-alert@aios-healthcheck.service
+Description=AI Business OS production health check
+After=network-online.target docker.service nginx.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/home/ubuntu/ai-business-os/ai-business-os-v1-integrated-repo/deploy/systemd/aios-healthcheck.sh

@@ -1,0 +1,6 @@
+[Unit]
+Description=AI Business OS alert handler for %i
+
+[Service]
+Type=oneshot
+ExecStart=/home/ubuntu/ai-business-os/ai-business-os-v1-integrated-repo/deploy/systemd/aios-alert.sh %i
