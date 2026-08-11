@@ -6,3 +6,9 @@ __pycache__/
 dist/
 evidence/
 *.log
+
+# Production runtime artifacts
+.env.backup*
+.env.pre-ga-*
+backups/
+*.rc5-backup

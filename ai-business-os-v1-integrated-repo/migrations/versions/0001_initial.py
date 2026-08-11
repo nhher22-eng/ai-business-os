@@ -2,13 +2,14 @@
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 revision = "0001_initial"
 down_revision = None
 branch_labels = None
 depends_on = None
 
-run_status = sa.Enum("queued", "running", "succeeded", "failed", name="runstatus")
+run_status = postgresql.ENUM("queued", "running", "succeeded", "failed", name="runstatus", create_type=False)
 
 def upgrade():
     run_status.create(op.get_bind(), checkfirst=True)
