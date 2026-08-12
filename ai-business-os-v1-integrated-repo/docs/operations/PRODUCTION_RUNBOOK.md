@@ -172,11 +172,11 @@ Preserve logs and create or verify a database backup before destructive recovery
 
 GA runtime hardening baseline:
 
-    f41b6c1 release: harden GA runtime and backup operations
+    f5826f1 release: certify AI Business OS v1.0.0 GA
 
 Release:
 
-    v1.0.0-ga
+    v1.0.0
 
 See:
 
