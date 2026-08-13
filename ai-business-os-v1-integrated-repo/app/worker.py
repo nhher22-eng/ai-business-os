@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from app.db.session import SessionLocal
 from app.db.models import Run, RunStatus, WorkerHeartbeat
 from app.services.queue import dequeue_run, enqueue_run
+from app.services.agent_control import authorize_identity
 
 WORKER_ID = f"{socket.gethostname()}:{os.getpid()}"
 
@@ -52,6 +53,32 @@ def process(run_id: str, attempt: int = 0):
         run = db.get(Run, run_id)
 
         if not run:
+            return
+
+        decision = authorize_identity(
+            db,
+            tenant_id=run.tenant_id,
+            agent_id=run.agent_id,
+            source="worker",
+            run_id=run.id,
+        )
+
+        if not decision.allowed:
+            # Keep the existing GA RunStatus enum unchanged.
+            # A dedicated BLOCKED enum can be introduced later
+            # through a separate governed migration.
+            run.status = RunStatus.failed
+            run.result = (
+                f"Execution blocked by automation control: "
+                f"{decision.reason_code}"
+            )
+            db.commit()
+
+            print(
+                f"run={run.id} blocked "
+                f"reason={decision.reason_code}",
+                flush=True,
+            )
             return
 
         run.status = RunStatus.running
