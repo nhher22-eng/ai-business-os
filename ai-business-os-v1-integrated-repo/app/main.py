@@ -6,7 +6,14 @@ from app.core.config import settings
 from app.db.session import engine
 from app.api.runs import router as runs_router
 from app.api.operations import router as operations_router
+from app.api.business import router as business_router
+from app.api.dashboard_session import router as dashboard_session_router
+from app.api.images import router as images_router
+from app.api.detail_pages import router as detail_pages_router
+from app.dashboard_ui import router as dashboard_ui_router
 from app.operations_ui import router as operations_ui_router
+from app.image_studio_ui import router as image_studio_ui_router
+from app.detail_page_ui import router as detail_page_ui_router
 from app.services.queue import queue_depth
 
 
@@ -17,7 +24,14 @@ app = FastAPI(
 
 app.include_router(runs_router)
 app.include_router(operations_router)
+app.include_router(dashboard_ui_router)
+app.include_router(business_router)
+app.include_router(dashboard_session_router)
 app.include_router(operations_ui_router)
+app.include_router(images_router)
+app.include_router(detail_pages_router)
+app.include_router(image_studio_ui_router)
+app.include_router(detail_page_ui_router)
 
 
 @app.get("/")

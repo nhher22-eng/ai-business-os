@@ -418,6 +418,45 @@ button:disabled {
 
   </div>
 
+  <section class="card" style="margin-top:16px">
+    <h2>Real Business Workspace</h2>
+
+    <div class="status">
+      <div class="status-row">
+        <div class="k">Workspace</div>
+        <div class="v" id="workspaceName">-</div>
+      </div>
+
+      <div class="status-row">
+        <div class="k">Mode</div>
+        <div class="v badge" id="workspaceMode">UNKNOWN</div>
+      </div>
+
+      <div class="status-row">
+        <div class="k">Product</div>
+        <div class="v" id="productName">-</div>
+      </div>
+
+      <div class="status-row">
+        <div class="k">Sales channel</div>
+        <div class="v" id="salesChannel">-</div>
+      </div>
+
+      <div class="status-row">
+        <div class="k">SKU</div>
+        <div class="v" id="skuList">-</div>
+      </div>
+    </div>
+
+    <button
+      class="primary"
+      style="width:100%;margin-top:16px"
+      onclick="loadBusinessData()"
+    >
+      Load Business Data
+    </button>
+  </section>
+
   <div
     id="log"
     class="log"
@@ -595,6 +634,73 @@ async function setTenant(paused) {
     showLog(String(error));
   }
 }
+
+async function loadBusinessData() {
+  try {
+    showLog("Loading real business data...");
+
+    const v = values();
+
+    const workspaces = await request(
+      "/api/v1/business/workspaces?tenant_id=" +
+      encodeURIComponent(v.tenant),
+      { headers: headers(false) }
+    );
+
+    const workspace = workspaces.find(
+      (x) => x.slug === "commerce-ai"
+    ) || workspaces[0];
+
+    if (!workspace) {
+      throw new Error("No business workspace found.");
+    }
+
+    const products = await request(
+      "/api/v1/business/products?tenant_id=" +
+      encodeURIComponent(v.tenant) +
+      "&workspace_id=" +
+      encodeURIComponent(workspace.id),
+      { headers: headers(false) }
+    );
+
+    const product = products.find(
+      (x) => x.product_code === "IRRIGATION-8MM-KIT"
+    ) || products[0];
+
+    if (!product) {
+      throw new Error("No product found.");
+    }
+
+    const skus = await request(
+      "/api/v1/business/skus?tenant_id=" +
+      encodeURIComponent(v.tenant) +
+      "&product_id=" +
+      encodeURIComponent(product.id),
+      { headers: headers(false) }
+    );
+
+    $("workspaceName").textContent = workspace.name;
+    $("workspaceMode").textContent =
+      String(workspace.mode).toUpperCase();
+    $("productName").textContent = product.name;
+    $("salesChannel").textContent =
+      product.sales_channel || "-";
+    $("skuList").textContent =
+      skus.map((x) => x.option_value || x.name).join(" / ");
+
+    showLog(
+      "Business data loaded.\n" +
+      JSON.stringify(
+        { workspace, product, skus },
+        null,
+        2
+      )
+    );
+  } catch (error) {
+    showLog(String(error));
+  }
+}
+
 </script>
 
 </body>

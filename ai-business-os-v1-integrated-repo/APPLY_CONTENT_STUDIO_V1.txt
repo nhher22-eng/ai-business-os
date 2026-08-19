@@ -1,0 +1,11 @@
+AI Business OS — Content Studio v1 Patch
+
+This ZIP is an overlay patch for the exact latest EC2 working-tree snapshot uploaded on 2026-08-18.
+
+1) Keep the server's existing .env file. This patch does not contain .env or secret keys.
+2) Extract this ZIP over ~/ai-business-os/ai-business-os-v1-integrated-repo
+3) Run:
+   cd ~/ai-business-os/ai-business-os-v1-integrated-repo
+   ./scripts/deploy_content_studio_v1.sh
+
+The deployment script performs a PostgreSQL backup, builds containers, applies Alembic 0005/0006, restarts services, and runs health/UI route checks.

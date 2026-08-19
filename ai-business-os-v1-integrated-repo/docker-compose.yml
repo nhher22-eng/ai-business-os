@@ -50,6 +50,8 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    volumes:
+      - media_data:/app/data
     networks: [aios]
 
   worker:
@@ -64,6 +66,22 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    volumes:
+      - media_data:/app/data
+    networks: [aios]
+
+  image_worker:
+    build: .
+    restart: unless-stopped
+    command: ["python", "-m", "app.image_worker"]
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - media_data:/app/data
     networks: [aios]
 
   scheduler:
@@ -83,6 +101,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  media_data:
 
 networks:
   aios:

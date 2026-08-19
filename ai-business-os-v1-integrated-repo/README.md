@@ -17,6 +17,10 @@ EC2 + Docker Compose에서 바로 실행할 수 있도록 정리한 통합 배�
 - HP-02 / HP-03 / HP-04 / HP-05 결과물 통합 보관
 - Live Validation Pack
 - EC2 배포 스크립트
+- M05 AI 이미지 생성 스튜디오 (`/image-studio`)
+- M06 상세페이지 생성 스튜디오 (`/detail-pages`)
+- 브랜드 스타일 시트 / 템플릿 / 섹션 버전관리 / QA Gate
+- 이미지 Preview → Final 승인 흐름 및 상품 기준사진 보호 정책
 
 ## EC2 빠른 시작
 
@@ -49,3 +53,13 @@ curl -X POST http://localhost:8000/api/v1/runs \
 파일 자체가 존재하지 않는 개별 코드 조각을 임의로 "복원 완료"라고 주장하지 않습니다.
 
 실제 GA 승인은 live infrastructure evidence가 필요합니다.
+
+## Content Studio v1
+
+M05/M06 구현 범위, 안전 규칙, 제한사항과 배포 검증 내용은 `docs/CONTENT_STUDIO_V1.md`를 참고하세요.
+
+서버에서 기존 `.env`를 보존한 상태로 업데이트한 뒤 다음 스크립트로 DB 백업 → 빌드 → migration → 재기동 → health check를 한 번에 수행할 수 있습니다.
+
+```bash
+./scripts/deploy_content_studio_v1.sh
+```
