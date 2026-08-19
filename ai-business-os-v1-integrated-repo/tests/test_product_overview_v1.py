@@ -1,4 +1,5 @@
-from app import dashboard_ui, product_registration_ui
+from app import dashboard_ui, detail_page_ui, product_registration_ui
+from app.detail_page_product_selection_ui_patch import inject_detail_page_product_selection
 from app.product_content_basis_ui_patch import inject_product_content_basis_editor
 from app.product_management_ui_patch import inject_product_management_mode
 from app.product_overview_ui import HTML as OVERVIEW_HTML, inject_product_overview_link
@@ -13,6 +14,8 @@ def test_product_overview_has_management_links_and_status_columns():
     assert 'SKU' in OVERVIEW_HTML
     assert '상세페이지' in OVERVIEW_HTML
     assert '/product-registration?product_id=' in OVERVIEW_HTML
+    assert '/detail-pages?product_id=' in OVERVIEW_HTML
+    assert '/detail-page-studio' not in OVERVIEW_HTML
     assert '＋ 새 상품 등록' in OVERVIEW_HTML
 
 
@@ -49,3 +52,9 @@ def test_management_mode_does_not_change_new_product_path():
     )
     assert "if(!id)return false" in html
     assert "if(productId&&new URLSearchParams(location.search).get('product_id'))" in html
+
+
+def test_detail_page_preselects_product_from_query_string():
+    html = inject_detail_page_product_selection(detail_page_ui.HTML)
+    assert "new URLSearchParams(location.search).get('product_id')" in html
+    assert 'requestedProduct' in html
