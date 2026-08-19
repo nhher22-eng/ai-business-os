@@ -16,6 +16,7 @@ from app.api.canva_controlled_export import router as canva_controlled_export_ro
 from app.api.product_registration import router as product_registration_router
 from app.api.product_registration_assets import router as product_registration_assets_router
 from app.api.product_overview import router as product_overview_router
+from app.api.product_operations import router as product_operations_router
 from app.dashboard_ui import router as dashboard_ui_router
 from app.operations_ui import router as operations_ui_router
 from app.image_studio_ui import router as image_studio_ui_router
@@ -32,6 +33,7 @@ from app.product_registration_resume_ui_patch import inject_product_registration
 from app.product_registration_image_restore_ui_patch import inject_product_image_restore
 from app.product_content_basis_ui_patch import inject_product_content_basis_editor
 from app.product_management_ui_patch import inject_product_management_mode
+from app.product_operations_ui_patch import inject_product_operations_ui
 from app.services.fact_grounded_copy_patch import install_fact_grounded_copy_patch
 from app.services.product_master_integration_patch import install_product_master_integration_patch
 from app.services.product_registration_safety_patch import install_product_registration_safety_patch
@@ -50,6 +52,7 @@ product_registration_ui.HTML = inject_product_registration_resume(product_regist
 product_registration_ui.HTML = inject_product_image_restore(product_registration_ui.HTML)
 product_registration_ui.HTML = inject_product_content_basis_editor(product_registration_ui.HTML)
 product_registration_ui.HTML = inject_product_management_mode(product_registration_ui.HTML)
+product_registration_ui.HTML = inject_product_operations_ui(product_registration_ui.HTML)
 
 app = FastAPI(
     title=settings.app_name,
@@ -63,6 +66,7 @@ app.include_router(business_router)
 app.include_router(product_registration_router)
 app.include_router(product_registration_assets_router)
 app.include_router(product_overview_router)
+app.include_router(product_operations_router)
 app.include_router(dashboard_session_router)
 app.include_router(operations_ui_router)
 app.include_router(images_router)
@@ -101,34 +105,18 @@ def ready():
             conn.execute(text("SELECT 1"))
         checks["postgres"] = "ok"
     except Exception as exc:
-        checks["postgres"] = (
-            f"error: {type(exc).__name__}"
-        )
+        checks["postgres"] = f"error: {type(exc).__name__}"
 
     try:
         r = redis.Redis.from_url(settings.redis_url)
-        checks["redis"] = (
-            "ok"
-            if r.ping()
-            else "error"
-        )
+        checks["redis"] = "ok" if r.ping() else "error"
     except Exception as exc:
-        checks["redis"] = (
-            f"error: {type(exc).__name__}"
-        )
+        checks["redis"] = f"error: {type(exc).__name__}"
 
-    status = (
-        "ok"
-        if all(v == "ok" for v in checks.values())
-        else "degraded"
-    )
+    status = "ok" if all(v == "ok" for v in checks.values()) else "degraded"
 
     return {
         "status": status,
         "checks": checks,
-        "queue_depth": (
-            queue_depth()
-            if checks.get("redis") == "ok"
-            else None
-        ),
+        "queue_depth": queue_depth() if checks.get("redis") == "ok" else None,
     }
