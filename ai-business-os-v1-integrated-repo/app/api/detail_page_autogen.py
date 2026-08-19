@@ -74,6 +74,7 @@ def generate_release_candidate(
         "status": result.job.status,
         "qa_summary": result.qa_summary,
         "release_ready": result.release_ready,
+        "fact_readiness": result.fact_readiness,
         "enabled_sections": result.enabled_sections,
         "hidden_sections": result.hidden_sections,
         "qa": [
@@ -88,7 +89,9 @@ def generate_release_candidate(
         ],
         "next_action": (
             "human_approval_then_canva_export"
-            if result.qa_summary == "PASS"
+            if result.release_ready
+            else "complete_product_facts"
+            if not result.fact_readiness.get("ready")
             else "resolve_review_or_fail_items"
         ),
     }
