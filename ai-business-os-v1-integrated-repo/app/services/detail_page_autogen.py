@@ -10,7 +10,6 @@ from app.db.models import (
     BusinessWorkspace,
     DetailPageJob,
     DetailPageQAResult,
-    DetailPageSection,
     DetailPageTemplate,
     DetailPageVersion,
     Product,
@@ -128,6 +127,40 @@ def apply_release_candidate_rules(
     return enabled, hidden
 
 
+def _reconcile_conditional_required_sections(
+    db: Session,
+    *,
+    version: DetailPageVersion,
+    qa_rows: list[DetailPageQAResult],
+) -> None:
+    """Make REQUIRED_SECTIONS QA honor per-version conditional required flags.
+
+    The legacy M06 QA uses a global required-section set. Auto-generation can
+    intentionally hide review/add-on/related sections when their source data is
+    absent. In that case those sections are marked is_required=False, so the
+    release-candidate QA must evaluate the version's effective required set.
+    """
+    sections = version_sections(db, version.id)
+    enabled_types = {s.section_type for s in sections if s.is_enabled}
+    effective_required = {s.section_type for s in sections if s.is_required}
+    missing = sorted(effective_required - enabled_types)
+
+    row = next((q for q in qa_rows if q.check_code == "REQUIRED_SECTIONS"), None)
+    if row is None:
+        return
+    if missing:
+        row.status = "FAIL"
+        row.severity = "error"
+        row.message = f"필수 섹션 누락: {', '.join(missing)}"
+        row.suggested_fix = "필수 섹션을 다시 활성화하세요."
+    else:
+        row.status = "PASS"
+        row.severity = "info"
+        row.message = "조건부 페이지 규칙을 반영한 필수 상세페이지 섹션이 모두 존재합니다."
+        row.suggested_fix = None
+    db.flush()
+
+
 def auto_generate_release_candidate(
     db: Session,
     *,
@@ -209,6 +242,7 @@ def auto_generate_release_candidate(
     enabled, hidden = apply_release_candidate_rules(db, job=job, version=version)
 
     qa_rows = run_qa(db, job=job, version=version)
+    _reconcile_conditional_required_sections(db, version=version, qa_rows=qa_rows)
     summary = qa_summary(qa_rows)
     # run_qa moves the job into qa_review; keep the more specific pipeline state.
     job.status = "release_candidate_review"
