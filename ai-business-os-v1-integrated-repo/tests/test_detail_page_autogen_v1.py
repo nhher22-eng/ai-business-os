@@ -101,7 +101,7 @@ def test_release_candidate_keeps_available_conditional_sections(monkeypatch):
     ]
 
 
-def test_release_ready_only_on_full_pass():
+def test_release_ready_requires_qa_pass_and_fact_readiness():
     base = dict(
         job=SimpleNamespace(),
         version=SimpleNamespace(),
@@ -109,6 +109,15 @@ def test_release_ready_only_on_full_pass():
         enabled_sections=[],
         hidden_sections=[],
     )
-    assert autogen.AutoGenerateResult(**base, qa_summary="PASS").release_ready is True
-    assert autogen.AutoGenerateResult(**base, qa_summary="REVIEW").release_ready is False
-    assert autogen.AutoGenerateResult(**base, qa_summary="FAIL").release_ready is False
+    assert autogen.AutoGenerateResult(
+        **base, qa_summary="PASS", fact_readiness={"ready": True}
+    ).release_ready is True
+    assert autogen.AutoGenerateResult(
+        **base, qa_summary="PASS", fact_readiness={"ready": False}
+    ).release_ready is False
+    assert autogen.AutoGenerateResult(
+        **base, qa_summary="REVIEW", fact_readiness={"ready": True}
+    ).release_ready is False
+    assert autogen.AutoGenerateResult(
+        **base, qa_summary="FAIL", fact_readiness={"ready": True}
+    ).release_ready is False
