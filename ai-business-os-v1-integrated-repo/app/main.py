@@ -23,6 +23,7 @@ from app.product_overview_ui import router as product_overview_ui_router, inject
 from app import dashboard_ui, detail_page_ui, product_registration_ui
 from app.detail_page_autogen_ui_patch import inject_autogen_ui
 from app.detail_page_content_basis_ui_patch import inject_detail_page_content_basis_editor
+from app.detail_page_product_selection_ui_patch import inject_detail_page_product_selection
 from app.product_registration_ui import (
     inject_product_registration_link,
     router as product_registration_ui_router,
@@ -42,6 +43,7 @@ install_product_master_integration_patch()
 install_product_registration_safety_patch()
 detail_page_ui.HTML = inject_autogen_ui(detail_page_ui.HTML)
 detail_page_ui.HTML = inject_detail_page_content_basis_editor(detail_page_ui.HTML)
+detail_page_ui.HTML = inject_detail_page_product_selection(detail_page_ui.HTML)
 dashboard_ui.HTML = inject_product_registration_link(dashboard_ui.HTML)
 dashboard_ui.HTML = inject_product_overview_link(dashboard_ui.HTML)
 product_registration_ui.HTML = inject_product_registration_resume(product_registration_ui.HTML)
