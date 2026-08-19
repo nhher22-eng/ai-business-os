@@ -19,6 +19,7 @@ from app.db.models import (
 from app.services.detail_page_studio import (
     create_prepared_version,
     ensure_defaults,
+    product_snapshot,
     qa_summary,
     run_qa,
     version_sections,
@@ -45,6 +46,44 @@ class AutoGenerateResult:
     @property
     def release_ready(self) -> bool:
         return self.qa_summary == "PASS"
+
+
+def fact_readiness(snapshot: dict) -> dict:
+    """Evaluate whether Product DB facts are sufficient for a selling-page release.
+
+    The rule is intentionally conservative. A product name alone is enough to
+    prepare a draft, but not enough to approve/export a selling page. At least
+    one meaningful ProductDetail fact or one SKU must exist. Missing values are
+    never inferred from memory, copy, or images.
+    """
+    product = snapshot.get("product") or {}
+    detail = snapshot.get("detail") or {}
+    skus = snapshot.get("skus") or []
+
+    detail_values = [
+        detail.get("specification"),
+        detail.get("usage"),
+        detail.get("installation_method"),
+        detail.get("usage_conditions"),
+        detail.get("cautions"),
+    ]
+    has_detail_fact = any(bool(str(value).strip()) for value in detail_values if value is not None)
+    has_sku_fact = bool(skus)
+    has_name = bool(str(product.get("name") or "").strip())
+
+    missing = []
+    if not has_name:
+        missing.append("product.name")
+    if not has_detail_fact and not has_sku_fact:
+        missing.append("product_detail_or_sku")
+
+    return {
+        "ready": not missing,
+        "missing": missing,
+        "has_product_name": has_name,
+        "has_detail_fact": has_detail_fact,
+        "has_sku_fact": has_sku_fact,
+    }
 
 
 def _has_verified_reviews(db: Session, *, tenant_id: str, product_id: str) -> bool:
@@ -133,13 +172,6 @@ def _reconcile_conditional_required_sections(
     version: DetailPageVersion,
     qa_rows: list[DetailPageQAResult],
 ) -> None:
-    """Make REQUIRED_SECTIONS QA honor per-version conditional required flags.
-
-    The legacy M06 QA uses a global required-section set. Auto-generation can
-    intentionally hide review/add-on/related sections when their source data is
-    absent. In that case those sections are marked is_required=False, so the
-    release-candidate QA must evaluate the version's effective required set.
-    """
     sections = version_sections(db, version.id)
     enabled_types = {s.section_type for s in sections if s.is_enabled}
     effective_required = {s.section_type for s in sections if s.is_required}
@@ -159,6 +191,45 @@ def _reconcile_conditional_required_sections(
         row.message = "조건부 페이지 규칙을 반영한 필수 상세페이지 섹션이 모두 존재합니다."
         row.suggested_fix = None
     db.flush()
+
+
+def _apply_fact_readiness_gate(
+    db: Session,
+    *,
+    job: DetailPageJob,
+    version: DetailPageVersion,
+    qa_rows: list[DetailPageQAResult],
+) -> dict:
+    readiness = fact_readiness(
+        product_snapshot(db, tenant_id=job.tenant_id, product_id=job.product_id)
+    )
+    if readiness["ready"]:
+        row = DetailPageQAResult(
+            tenant_id=job.tenant_id,
+            job_id=job.id,
+            version_no=version.version_no,
+            check_code="FACT_READINESS",
+            status="PASS",
+            severity="info",
+            message="판매용 상세페이지 생성에 필요한 최소 상품 FACT가 등록되어 있습니다.",
+            resolved=False,
+        )
+    else:
+        row = DetailPageQAResult(
+            tenant_id=job.tenant_id,
+            job_id=job.id,
+            version_no=version.version_no,
+            check_code="FACT_READINESS",
+            status="FAIL",
+            severity="error",
+            message="판매용 상세페이지를 승인하기 위한 확정 상품 FACT가 부족합니다. 미확정 값은 추정하지 않습니다.",
+            suggested_fix="ProductDetail의 확정 사양/사용정보를 등록하거나 실제 SKU를 등록한 뒤 다시 생성하세요.",
+            resolved=False,
+        )
+    db.add(row)
+    qa_rows.append(row)
+    db.flush()
+    return readiness
 
 
 def auto_generate_release_candidate(
@@ -243,8 +314,8 @@ def auto_generate_release_candidate(
 
     qa_rows = run_qa(db, job=job, version=version)
     _reconcile_conditional_required_sections(db, version=version, qa_rows=qa_rows)
+    _apply_fact_readiness_gate(db, job=job, version=version, qa_rows=qa_rows)
     summary = qa_summary(qa_rows)
-    # run_qa moves the job into qa_review; keep the more specific pipeline state.
     job.status = "release_candidate_review"
     version.status = "release_candidate_review"
     db.flush()
