@@ -58,3 +58,17 @@ def test_product_change_clears_old_fact_fields_before_loading_new_product():
     patched = inject_autogen_ui(HTML)
     assert 'clearFactEditorFields();' in patched
     assert "product.addEventListener('change',()=>loadFactEditor().catch(()=>{}))" in patched
+
+
+def test_fact_editor_always_shows_current_product_name():
+    patched = inject_autogen_ui(HTML)
+    assert 'id="factEditorProductLabel"' in patched
+    assert '현재 편집 상품:' in patched
+    assert "label.textContent=`현재 편집 상품: ${row?row.name:'선택 없음'}`" in patched
+
+
+def test_repotting_setup_button_is_hidden_after_product_exists():
+    patched = inject_autogen_ui(HTML)
+    assert 'style="display:none"' in patched
+    assert 'function repottingProductExists()' in patched
+    assert "setup.style.display=repottingProductExists()?'none':'block'" in patched
