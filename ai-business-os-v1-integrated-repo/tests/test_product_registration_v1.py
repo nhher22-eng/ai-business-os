@@ -21,8 +21,8 @@ def test_fallback_suggestions_do_not_invent_physical_facts():
     assert result["operating"]["cost"] is None
     assert "주재질: steel" in result["marketing"]["features"]
     assert result["category"] is None
-    assert result["usage"] == []
-    assert result["marketing"]["selling_points"] == []
+    fact_rows = result["editor"]["features"]
+    assert any(row["value"] == "주재질: steel" and row["status"] == "confirmed" for row in fact_rows)
 
 
 def test_ai_suggestions_are_blocked_until_facts_are_confirmed():
@@ -38,7 +38,7 @@ def test_ai_suggestions_are_blocked_until_facts_are_confirmed():
     assert result["operating"]["category"] is None
 
 
-def test_grounding_removes_unsupported_use_benefit_and_target_claims():
+def test_uncertain_ai_ideas_remain_visible_as_review_candidates():
     raw = {
         "category": "방충망",
         "usage": ["창문 방충", "벌레 차단"],
@@ -63,16 +63,13 @@ def test_grounding_removes_unsupported_use_benefit_and_target_claims():
     )
 
     assert result["category"] == "방충망"
-    assert result["usage"] == []
-    assert result["operating"]["usage"] == []
-    assert result["marketing"]["features"] == ["60메쉬", "지퍼형", "완제품 세트"]
-    assert result["marketing"]["selling_points"] == []
-    assert result["marketing"]["target_customer"] == []
-    rendered = str(result)
-    assert "창문 방충" not in rendered
-    assert "쉬운 설치" not in rendered
-    assert "별도 조립 불필요" not in rendered
-    assert "효과적으로 벌레 차단" not in rendered
+    editor = result["editor"]
+    assert editor["category"]["value"] == "방충망"
+    assert any(row["value"] == "창문 방충" and row["status"] == "review" for row in editor["usage"])
+    assert any(row["value"] == "쉬운 설치" and row["status"] == "review" for row in editor["selling_points"])
+    assert any(row["value"] == "가정용 창문 구매자" and row["status"] == "review" for row in editor["target_customer"])
+    assert any(row["value"] == "60메쉬" and row["source"] == "fact" for row in editor["features"])
+    assert any("확인" in row["reason"] for row in editor["selling_points"])
 
 
 def test_dashboard_link_injection_is_idempotent():

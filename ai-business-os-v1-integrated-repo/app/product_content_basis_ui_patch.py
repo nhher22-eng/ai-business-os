@@ -1,0 +1,33 @@
+from __future__ import annotations
+
+
+OLD_SHOW = """function showSuggestions(d){const op=d.operating||{};const mk=d.marketing||{};const list=x=>(x||[]).map(i=>`<li>${i}</li>`).join('')||'<span class=\"muted\">제안 없음</span>';document.getElementById('suggestionView').innerHTML=`<div class=\"suggestion\"><strong>카테고리</strong><div>${d.category||op.category||'<span class=\"muted\">제안 없음</span>'}</div></div><div class=\"suggestion\"><strong>용도</strong><ul>${list(d.usage||op.usage)}</ul></div><div class=\"suggestion\"><strong>특징</strong><ul>${list(mk.features)}</ul></div><div class=\"suggestion\"><strong>판매 포인트</strong><ul>${list(mk.selling_points)}</ul></div><div class=\"suggestion\"><strong>타깃</strong><ul>${list(mk.target_customer)}</ul></div><div class=\"suggestion\"><strong>콘텐츠 방향</strong><div>${mk.content_direction||'<span class=\"muted\">제안 없음</span>'}</div></div><div class=\"suggestion warn\"><strong>주의</strong><ul>${list(d.warnings)}</ul></div>`;document.getElementById('applyActions').classList.remove('hidden')}"""
+
+NEW_SHOW = r'''function basisBadge(item){if(item.source==='fact')return '<span style="color:#a7f3d0;font-size:12px;font-weight:800">✓ FACT</span>';if(item.status==='review')return '<span style="color:#fde68a;font-size:12px;font-weight:800">⚠ 확인 필요</span>';return '<span style="color:#bfdbfe;font-size:12px;font-weight:800">AI 제안</span>'}
+function basisRow(item,group,index){const checked=item.source==='fact'||item.status==='suggested'?'checked':'';return `<div class="basis-row" data-group="${group}" data-index="${index}" style="border:1px solid #35445a;border-radius:10px;padding:10px;margin-top:8px;background:${item.status==='review'?'#211c10':'#0b1220'}"><div style="display:flex;gap:8px;align-items:center"><input class="basis-use" type="checkbox" ${checked} style="width:auto"><input class="basis-value" value="${escapeHtml(item.value||'')}" style="flex:1"><button type="button" class="secondary" style="padding:7px 9px" onclick="this.closest('.basis-row').remove()">삭제</button></div><div style="display:flex;justify-content:space-between;gap:10px;margin-top:7px">${basisBadge(item)}<span class="muted" style="text-align:right">${escapeHtml(item.reason||'')}</span></div></div>`}
+function basisGroup(title,key,items){const rows=(items||[]).map((x,i)=>basisRow(x,key,i)).join('');return `<div class="suggestion"><strong>${title}</strong><div id="basis-${key}">${rows||'<div class="muted" style="margin-top:8px">현재 제안 없음 · 필요하면 직접 추가할 수 있습니다.</div>'}</div><button type="button" class="secondary" style="margin-top:8px;padding:7px 9px" onclick="addBasisRow('${key}')">+ 직접 추가</button></div>`}
+function addBasisRow(group){const box=document.getElementById(`basis-${group}`);if(!box)return;const placeholder=box.querySelector('.muted');if(placeholder)placeholder.remove();const wrap=document.createElement('div');wrap.innerHTML=basisRow({value:'',source:'user',status:'suggested',reason:'사용자가 직접 추가한 내용입니다.'},group,Date.now());box.appendChild(wrap.firstElementChild)}
+function showSuggestions(d){const e=d.editor||{};const categoryItems=e.category?[e.category]:[];const directionItems=e.content_direction?[e.content_direction]:[];document.getElementById('suggestionView').innerHTML=`<div class="notice" style="margin-bottom:10px">AI 아이디어를 출발점으로 사용하세요. 필요 없는 항목은 삭제하거나 체크를 끄고, 맞는 내용은 직접 고쳐 구체화할 수 있습니다. 비워둬도 됩니다.</div>${basisGroup('카테고리','category',categoryItems)}${basisGroup('용도','usage',e.usage)}${basisGroup('특징','features',e.features)}${basisGroup('판매 포인트','selling_points',e.selling_points)}${basisGroup('타깃','target_customer',e.target_customer)}${basisGroup('콘텐츠 방향','content_direction',directionItems)}<div class="suggestion warn"><strong>안내</strong><ul>${(d.warnings||[]).map(x=>`<li>${escapeHtml(x)}</li>`).join('')}</ul></div>`;document.getElementById('applyActions').classList.remove('hidden')}
+function collectBasis(group){return [...document.querySelectorAll(`#basis-${group} .basis-row`)].filter(row=>row.querySelector('.basis-use')?.checked).map(row=>row.querySelector('.basis-value')?.value.trim()).filter(Boolean)}
+function editedBasisPayload(){const category=collectBasis('category')[0]||null;const usage=collectBasis('usage');const features=collectBasis('features');const selling=collectBasis('selling_points');const targets=collectBasis('target_customer');const direction=collectBasis('content_direction')[0]||null;return {operating_info:{category,usage},marketing_info:{features,selling_points:selling,target_customer:targets,content_direction:direction}}}'''
+
+OLD_APPLY = """async function applySuggestions(){const s=document.getElementById('aiStatus');try{if(!currentSuggestions)throw new Error('먼저 AI 제안을 생성하세요.');await api(`/api/v1/product-registration/products/${productId}/apply-suggestions?tenant_id=${tenant}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({operating_info:currentSuggestions.operating||{},marketing_info:currentSuggestions.marketing||{}})});s.innerHTML='<span class=\"ok\">제안 적용 완료</span>';document.getElementById('doneCard').classList.remove('hidden');}catch(e){s.textContent=String(e)}}"""
+
+NEW_APPLY = """async function applySuggestions(){const s=document.getElementById('aiStatus');try{if(!currentSuggestions)throw new Error('먼저 AI 제안을 생성하세요.');const payload=editedBasisPayload();await api(`/api/v1/product-registration/products/${productId}/apply-suggestions?tenant_id=${tenant}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});s.innerHTML='<span class=\"ok\">콘텐츠 기준정보 저장 완료 · 상세페이지에서 재사용됩니다.</span>';document.getElementById('doneCard').classList.remove('hidden');}catch(e){s.textContent=String(e)}}"""
+
+STYLE_MARKER = ".suggestion:last-child{border-bottom:0}.ok{color:#a7f3d0}.warn{color:#fde68a}"
+STYLE_REPLACEMENT = STYLE_MARKER + ".basis-row input[type=text],.basis-row input:not([type]){min-width:0}.basis-row .basis-value{font-size:14px}"
+
+
+def inject_product_content_basis_editor(html: str) -> str:
+    if "editedBasisPayload" in html:
+        return html
+    if OLD_SHOW not in html:
+        raise RuntimeError("product suggestion renderer marker not found")
+    html = html.replace(OLD_SHOW, NEW_SHOW, 1)
+    if OLD_APPLY not in html:
+        raise RuntimeError("product suggestion apply marker not found")
+    html = html.replace(OLD_APPLY, NEW_APPLY, 1)
+    if STYLE_MARKER in html:
+        html = html.replace(STYLE_MARKER, STYLE_REPLACEMENT, 1)
+    return html
