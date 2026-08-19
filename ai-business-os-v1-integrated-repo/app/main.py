@@ -17,9 +17,11 @@ from app.operations_ui import router as operations_ui_router
 from app.image_studio_ui import router as image_studio_ui_router
 from app import detail_page_ui
 from app.detail_page_autogen_ui_patch import inject_autogen_ui
+from app.services.fact_grounded_copy_patch import install_fact_grounded_copy_patch
 from app.services.queue import queue_depth
 
 
+install_fact_grounded_copy_patch()
 detail_page_ui.HTML = inject_autogen_ui(detail_page_ui.HTML)
 
 app = FastAPI(
