@@ -12,7 +12,8 @@ _AUTOGEN_BUTTON = r'''
 </div>
 <div style="margin-top:10px;padding:12px;border:1px solid #d8e9dd;border-radius:12px;background:#f7fbf8">
   <div style="font-size:12px;font-weight:900;color:#1f6b4f;margin-bottom:6px">상품 FACT 편집</div>
-  <button id="repottingSetupBtn" class="btn ghost full" onclick="ensureRepottingMatProduct()">분갈이 매트 테스트 상품 준비</button>
+  <div id="factEditorProductLabel" style="padding:9px 10px;margin-bottom:8px;border-radius:9px;background:#eaf5ee;font-size:13px;font-weight:900;color:#14532d">현재 편집 상품: 선택 없음</div>
+  <button id="repottingSetupBtn" class="btn ghost full" style="display:none" onclick="ensureRepottingMatProduct()">분갈이 매트 테스트 상품 준비</button>
   <div id="factEditorStatus" class="muted" style="margin-top:7px;line-height:1.5">현재 선택 상품의 확정 FACT만 입력합니다. 모르는 값은 비워두세요.</div>
   <div id="factEditor" style="display:none;margin-top:10px">
     <div class="label">확정 사양</div><textarea id="factSpecification" placeholder="예: 실제 확인된 크기·소재·구조만 입력"></textarea>
@@ -45,11 +46,24 @@ function showFactEditor(show){const box=document.getElementById('factEditor');if
 function clearFactEditorFields(){
   factSpecification.value='';factUsage.value='';factInstallation.value='';factConditions.value='';factCautions.value='';
 }
+function repottingProductExists(){return (products||[]).some(p=>p.product_code==='REPOTTING-MAT'||p.name==='분갈이 매트')}
+function updateFactEditorContext(){
+  const row=selectedProductRow();
+  const label=document.getElementById('factEditorProductLabel');
+  const setup=document.getElementById('repottingSetupBtn');
+  if(label){
+    label.textContent=`현재 편집 상품: ${row?row.name:'선택 없음'}`;
+    label.style.background=row?'#eaf5ee':'#f3f4f6';
+    label.style.color=row?'#14532d':'#6b7280';
+  }
+  if(setup){setup.style.display=repottingProductExists()?'none':'block'}
+}
 async function refreshProducts(selectId=null){
   if(!workspace)return;
   products=await jf(`/api/v1/business/products?tenant_id=${tenant}&workspace_id=${workspace.id}`);
   product.innerHTML=products.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
   if(selectId && products.some(p=>p.id===selectId))product.value=selectId;
+  updateFactEditorContext();
 }
 async function ensureRepottingMatProduct(){
   if(factEditorBusy||!workspace)return;
@@ -65,17 +79,19 @@ async function ensureRepottingMatProduct(){
       await refreshProducts(row.id);
     }else{
       product.value=row.id;
+      updateFactEditorContext();
     }
     await loadFactEditor();
     if(product.value===row.id){status.innerHTML='<strong style="color:#1f6b4f">분갈이 매트 테스트 상품 준비 완료</strong><br>확인된 FACT만 입력하고 저장하세요.'}
   }catch(e){status.textContent=`테스트 상품 준비 실패: ${e.message}`;alert(e.message)}
-  finally{factEditorBusy=false;btn.disabled=false}
+  finally{factEditorBusy=false;btn.disabled=false;updateFactEditorContext()}
 }
 async function loadFactEditor(){
   const row=selectedProductRow(),status=document.getElementById('factEditorStatus');
   const serial=++factLoadSerial;
   factEditorProductId=null;
   clearFactEditorFields();
+  updateFactEditorContext();
   if(!row){showFactEditor(false);return}
   showFactEditor(true);
   status.innerHTML=`<strong>${esc(row.name)}</strong> FACT 불러오는 중...`;
@@ -134,7 +150,7 @@ async function autoGenerateRC(){
 const _baseInitForFactEditor=init;
 init=async function(){
   await _baseInitForFactEditor();
-  if(product){product.addEventListener('change',()=>loadFactEditor().catch(()=>{}));await loadFactEditor()}
+  if(product){product.addEventListener('change',()=>loadFactEditor().catch(()=>{}));updateFactEditorContext();await loadFactEditor()}
 }
 '''.strip()
 
