@@ -38,6 +38,19 @@ def test_product_registration_editor_composes_with_resume_and_image_restore():
     assert "현재 저장된 이미지" in html
 
 
+def test_product_registration_separates_editor_guidance_from_product_notes():
+    html = product_registration_ui.HTML
+    html = inject_product_registration_resume(html)
+    html = inject_product_image_restore(html)
+    html = inject_product_content_basis_editor(html)
+
+    assert "AI 제안 편집 안내" in html
+    assert "상품 관련 참고·주의" in html
+    assert "product_notes" in html
+    assert "productNoteItems" in html
+    assert "marketing_info:{features,selling_points:selling,target_customer:targets,content_direction:direction,product_notes:productNotes}" in html
+
+
 def test_detail_page_manual_basis_editor_composes_after_autogen_patch():
     html = inject_autogen_ui(detail_page_ui.HTML)
     html = inject_detail_page_content_basis_editor(html)
