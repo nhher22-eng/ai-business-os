@@ -171,6 +171,23 @@ def _reconcile_conditional_required_sections(
     db.flush()
 
 
+def _reconcile_review_source(
+    db: Session, *, version: DetailPageVersion, qa_rows: list[DetailPageQAResult]
+) -> None:
+    """Treat missing review data as normal when review sections were auto-hidden."""
+    enabled_types = {s.section_type for s in version_sections(db, version.id) if s.is_enabled}
+    review_enabled = bool(enabled_types & {"REVIEW_SUMMARY", "REVIEW_DETAIL"})
+    row = next((q for q in qa_rows if q.check_code == "REVIEW_SOURCE"), None)
+    if row is None or row.status != "REVIEW" or review_enabled:
+        return
+    row.status = "PASS"
+    row.severity = "info"
+    row.message = "실제 리뷰 데이터가 없어 리뷰 섹션을 자동 제외했습니다. 가짜 리뷰는 생성하지 않습니다."
+    row.suggested_fix = None
+    row.section_id = None
+    db.flush()
+
+
 def _apply_fact_readiness_gate(
     db: Session,
     *,
@@ -288,6 +305,7 @@ def auto_generate_release_candidate(
     enabled, hidden = apply_release_candidate_rules(db, job=job, version=version)
     qa_rows = run_qa(db, job=job, version=version)
     _reconcile_conditional_required_sections(db, version=version, qa_rows=qa_rows)
+    _reconcile_review_source(db, version=version, qa_rows=qa_rows)
     readiness = _apply_fact_readiness_gate(db, job=job, version=version, qa_rows=qa_rows)
     summary = qa_summary(qa_rows)
     job.status = "release_candidate_review"
