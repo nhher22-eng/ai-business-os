@@ -120,7 +120,17 @@ def _get_profile(db: Session, *, tenant_id: str, product_id: str) -> ProductRegi
         )
     )
     if row is None:
-        raise HTTPException(404, detail="product registration profile not found")
+        # Legacy products created before Product Registration may not have a
+        # profile yet. Create an empty compatibility profile on first access.
+        # No FACT values are invented or confirmed here.
+        row = ProductRegistrationProfile(
+            tenant_id=tenant_id,
+            product_id=product_id,
+            additional_image_asset_ids=[],
+        )
+        db.add(row)
+        db.commit()
+        db.refresh(row)
     return row
 
 
