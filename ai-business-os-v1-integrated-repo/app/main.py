@@ -12,17 +12,27 @@ from app.api.images import router as images_router
 from app.api.detail_pages import router as detail_pages_router
 from app.api.detail_page_autogen import router as detail_page_autogen_router
 from app.api.canva_controlled_export import router as canva_controlled_export_router
+from app.api.product_registration import router as product_registration_router
 from app.dashboard_ui import router as dashboard_ui_router
 from app.operations_ui import router as operations_ui_router
 from app.image_studio_ui import router as image_studio_ui_router
-from app import detail_page_ui
+from app import dashboard_ui, detail_page_ui
 from app.detail_page_autogen_ui_patch import inject_autogen_ui
+from app.product_registration_ui import (
+    inject_product_registration_link,
+    router as product_registration_ui_router,
+)
 from app.services.fact_grounded_copy_patch import install_fact_grounded_copy_patch
+from app.services.product_master_integration_patch import install_product_master_integration_patch
+from app.services.product_registration_safety_patch import install_product_registration_safety_patch
 from app.services.queue import queue_depth
 
 
 install_fact_grounded_copy_patch()
+install_product_master_integration_patch()
+install_product_registration_safety_patch()
 detail_page_ui.HTML = inject_autogen_ui(detail_page_ui.HTML)
+dashboard_ui.HTML = inject_product_registration_link(dashboard_ui.HTML)
 
 app = FastAPI(
     title=settings.app_name,
@@ -33,6 +43,7 @@ app.include_router(runs_router)
 app.include_router(operations_router)
 app.include_router(dashboard_ui_router)
 app.include_router(business_router)
+app.include_router(product_registration_router)
 app.include_router(dashboard_session_router)
 app.include_router(operations_ui_router)
 app.include_router(images_router)
@@ -40,6 +51,7 @@ app.include_router(detail_pages_router)
 app.include_router(detail_page_autogen_router)
 app.include_router(canva_controlled_export_router)
 app.include_router(image_studio_ui_router)
+app.include_router(product_registration_ui_router)
 app.include_router(detail_page_ui.router)
 
 
