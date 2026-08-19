@@ -2,6 +2,14 @@ from app.services.canva_controlled_export import build_controlled_canva_contract
 
 
 def _second_product_payload():
+    """Second M06 product: repotting mat.
+
+    Only the product identity is currently confirmed in the project record.
+    Exact size, material, color, options, components, installation/use details,
+    and approved images intentionally remain empty until real Product DB facts
+    are connected. The regression test must prove that the pipeline does not
+    invent those missing values.
+    """
     return {
         "template": {
             "code": "A_PRACTICAL_TRUST",
@@ -9,54 +17,55 @@ def _second_product_payload():
         },
         "product_facts": {
             "product": {
-                "id": "p-net",
-                "product_code": "NET-ZIP",
-                "name": "과수 보호 지퍼형 방충망",
-                "description": "과수 보호용 완제품 방충망 세트",
+                "id": "p-repotting-mat",
+                "product_code": "REPOTTING-MAT",
+                "name": "분갈이 매트",
+                "description": None,
                 "sales_channel": "naver-smartstore",
             },
             "detail": {
-                "specification": "지퍼형 · 60메쉬",
-                "usage": "과수 및 열매 보호",
-                "installation_method": "대상 수목 또는 프레임에 씌워 사용",
+                "specification": None,
+                "usage": None,
+                "installation_method": None,
                 "usage_conditions": None,
                 "cautions": None,
             },
-            "skus": [
-                {
-                    "id": "s-net-1",
-                    "sku_code": "NET-S",
-                    "name": "소형",
-                    "option_value": "소형",
-                    "status": "active",
-                    "components": [],
-                }
-            ],
+            "skus": [],
         },
         "sections": [
-            {"type": "HERO", "enabled": True, "source_type": "fact", "content": {"title": "과수 보호 지퍼형 방충망"}, "image_asset_id": "approved-net-hero"},
-            {"type": "PROBLEM", "enabled": True, "source_type": "copy", "content": {"items": ["열매 보호"]}, "image_asset_id": None},
-            {"type": "LIFESTYLE", "enabled": True, "source_type": "fact", "content": {"body": "과수 및 열매 보호"}, "image_asset_id": "approved-net-life"},
-            {"type": "FEATURE", "enabled": True, "source_type": "fact", "content": {"specification": "지퍼형 · 60메쉬"}, "image_asset_id": None},
-            {"type": "OPTION_COMPARE", "enabled": True, "source_type": "fact", "content": {"options": ["소형"]}, "image_asset_id": None},
-            {"type": "COMPONENTS", "enabled": True, "source_type": "fact", "content": {"components": ["완제품 방충망 세트"]}, "image_asset_id": None},
-            {"type": "INSTALLATION", "enabled": True, "source_type": "fact", "content": {"body": "대상 수목 또는 프레임에 씌워 사용"}, "image_asset_id": None},
-            {"type": "SPEC", "enabled": True, "source_type": "fact", "content": {"specification": "지퍼형 · 60메쉬"}, "image_asset_id": None},
+            {"type": "HERO", "enabled": True, "source_type": "fact", "content": {"title": "분갈이 매트"}, "image_asset_id": None},
+            {"type": "PROBLEM", "enabled": True, "source_type": "copy", "content": {}, "image_asset_id": None},
+            {"type": "LIFESTYLE", "enabled": True, "source_type": "fact", "content": {}, "image_asset_id": None},
+            {"type": "FEATURE", "enabled": True, "source_type": "fact", "content": {}, "image_asset_id": None},
+            {"type": "OPTION_COMPARE", "enabled": True, "source_type": "fact", "content": {"options": []}, "image_asset_id": None},
+            {"type": "COMPONENTS", "enabled": True, "source_type": "fact", "content": {"components": []}, "image_asset_id": None},
+            {"type": "INSTALLATION", "enabled": True, "source_type": "fact", "content": {"body": None}, "image_asset_id": None},
+            {"type": "SPEC", "enabled": True, "source_type": "fact", "content": {"specification": None}, "image_asset_id": None},
             {"type": "FAQ", "enabled": True, "source_type": "copy", "content": {"items": []}, "image_asset_id": None},
         ],
     }
 
 
-def test_second_product_generates_same_9p_release_structure_without_irrigation_assumptions():
+def test_second_product_is_repotting_mat_and_keeps_same_9p_release_structure():
     contract = build_controlled_canva_contract(export_payload=_second_product_payload())
     assert contract["target"]["release_candidate_pages"] == list(range(1, 10))
-    assert contract["source_snapshot"]["product"]["product_code"] == "NET-ZIP"
-    assert contract["source_snapshot"]["detail"]["specification"] == "지퍼형 · 60메쉬"
-    assert contract["section_payloads"]["INSTALLATION"]["content"]["body"] == "대상 수목 또는 프레임에 씌워 사용"
+    assert contract["source_snapshot"]["product"]["product_code"] == "REPOTTING-MAT"
+    assert contract["source_snapshot"]["product"]["name"] == "분갈이 매트"
     assert contract["conditional_sections"]["included"] == []
 
 
-def test_second_product_export_keeps_image_truth_policy_and_no_invention_rules():
+def test_repotting_mat_missing_facts_are_preserved_not_invented():
+    contract = build_controlled_canva_contract(export_payload=_second_product_payload())
+    snapshot = contract["source_snapshot"]
+    assert snapshot["detail"]["specification"] is None
+    assert snapshot["detail"]["usage"] is None
+    assert snapshot["detail"]["installation_method"] is None
+    assert snapshot["skus"] == []
+    assert contract["section_payloads"]["INSTALLATION"]["content"]["body"] is None
+    assert contract["section_payloads"]["SPEC"]["content"]["specification"] is None
+
+
+def test_repotting_mat_export_keeps_image_truth_policy_and_no_invention_rules():
     contract = build_controlled_canva_contract(export_payload=_second_product_payload())
     policy = contract["source_policy"]
     assert policy["external_memory_fallback"] is False
