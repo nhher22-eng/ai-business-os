@@ -14,9 +14,12 @@ from app.api.detail_page_autogen import router as detail_page_autogen_router
 from app.dashboard_ui import router as dashboard_ui_router
 from app.operations_ui import router as operations_ui_router
 from app.image_studio_ui import router as image_studio_ui_router
-from app.detail_page_ui import router as detail_page_ui_router
+from app import detail_page_ui
+from app.detail_page_autogen_ui_patch import inject_autogen_ui
 from app.services.queue import queue_depth
 
+
+detail_page_ui.HTML = inject_autogen_ui(detail_page_ui.HTML)
 
 app = FastAPI(
     title=settings.app_name,
@@ -33,7 +36,7 @@ app.include_router(images_router)
 app.include_router(detail_pages_router)
 app.include_router(detail_page_autogen_router)
 app.include_router(image_studio_ui_router)
-app.include_router(detail_page_ui_router)
+app.include_router(detail_page_ui.router)
 
 
 @app.get("/")
