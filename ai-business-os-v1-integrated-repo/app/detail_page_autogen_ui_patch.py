@@ -10,11 +10,26 @@ _AUTOGEN_BUTTON = r'''
   <button id="autogenBtn" class="btn primary full" onclick="autoGenerateRC()">⚡ 상세페이지 자동생성</button>
   <div id="autogenStatus" class="muted" style="margin-top:7px;line-height:1.5">상품 FACT와 승인 이미지를 기준으로 필요한 페이지만 선택하고 QA까지 실행합니다.</div>
 </div>
+<div style="margin-top:10px;padding:12px;border:1px solid #d8e9dd;border-radius:12px;background:#f7fbf8">
+  <div style="font-size:12px;font-weight:900;color:#1f6b4f;margin-bottom:6px">상품 FACT 편집</div>
+  <button id="repottingSetupBtn" class="btn ghost full" onclick="ensureRepottingMatProduct()">분갈이 매트 테스트 상품 준비</button>
+  <div id="factEditorStatus" class="muted" style="margin-top:7px;line-height:1.5">현재 선택 상품의 확정 FACT만 입력합니다. 모르는 값은 비워두세요.</div>
+  <div id="factEditor" style="display:none;margin-top:10px">
+    <div class="label">확정 사양</div><textarea id="factSpecification" placeholder="예: 실제 확인된 크기·소재·구조만 입력"></textarea>
+    <div class="label">사용 정보</div><textarea id="factUsage" placeholder="실제 확인된 사용 용도만 입력"></textarea>
+    <div class="label">사용/설치 방법</div><textarea id="factInstallation" placeholder="실제 확인된 사용 순서만 입력"></textarea>
+    <div class="label">사용 조건</div><textarea id="factConditions" placeholder="확인된 조건이 없으면 비워두세요"></textarea>
+    <div class="label">주의사항</div><textarea id="factCautions" placeholder="확인된 주의사항이 없으면 비워두세요"></textarea>
+    <button id="saveFactsBtn" class="btn primary full" style="margin-top:8px" onclick="saveProductFacts()">확정 FACT 저장</button>
+    <div class="muted" style="margin-top:7px">저장 후 상세페이지 자동생성을 다시 실행하면 FACT 준비상태가 재평가됩니다.</div>
+  </div>
+</div>
 <button class="btn ghost full" style="margin-top:8px" onclick="createAndPrepare()">수동 제작으로 시작</button>
 '''.strip()
 
 _AUTOGEN_SCRIPT = r'''
 let autogenBusy=false;
+let factEditorBusy=false;
 function factReadinessHtml(d){
   const f=d.fact_readiness||{};
   if(f.ready){
@@ -22,6 +37,58 @@ function factReadinessHtml(d){
   }
   const missing=(f.missing_labels||[]).join(', ')||'확정 상품정보';
   return `<span style="color:#b42318;font-weight:900">FACT 보완 필요</span><br>부족 항목: ${esc(missing)}<br><span class="muted">미확정 값은 AI가 추정하지 않습니다. 상품정보를 보완한 뒤 다시 생성하세요.</span>`;
+}
+function selectedProductRow(){return (products||[]).find(p=>p.id===product.value)||null}
+function showFactEditor(show){const box=document.getElementById('factEditor');if(box)box.style.display=show?'block':'none'}
+async function refreshProducts(selectId=null){
+  if(!workspace)return;
+  products=await jf(`/api/v1/business/products?tenant_id=${tenant}&workspace_id=${workspace.id}`);
+  product.innerHTML=products.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  if(selectId && products.some(p=>p.id===selectId))product.value=selectId;
+}
+async function ensureRepottingMatProduct(){
+  if(factEditorBusy||!workspace)return;
+  factEditorBusy=true;
+  const btn=document.getElementById('repottingSetupBtn'),status=document.getElementById('factEditorStatus');
+  btn.disabled=true;status.textContent='분갈이 매트 테스트 상품 확인 중...';
+  try{
+    let row=(products||[]).find(p=>p.product_code==='REPOTTING-MAT'||p.name==='분갈이 매트');
+    if(!row){
+      row=await jf(`/api/v1/business/products?tenant_id=${tenant}`,{method:'POST',body:JSON.stringify({
+        workspace_id:workspace.id,product_code:'REPOTTING-MAT',name:'분갈이 매트',status:'draft',sales_channel:'naver-smartstore',description:null,image_nonlocked_allowed:false
+      })});
+      await refreshProducts(row.id);
+    }else{
+      product.value=row.id;
+    }
+    await loadFactEditor();
+    status.innerHTML='<strong style="color:#1f6b4f">분갈이 매트 테스트 상품 준비 완료</strong><br>확인된 FACT만 입력하고 저장하세요.';
+  }catch(e){status.textContent=`테스트 상품 준비 실패: ${e.message}`;alert(e.message)}
+  finally{factEditorBusy=false;btn.disabled=false}
+}
+async function loadFactEditor(){
+  const row=selectedProductRow(),status=document.getElementById('factEditorStatus');
+  if(!row){showFactEditor(false);return}
+  showFactEditor(true);
+  factSpecification.value='';factUsage.value='';factInstallation.value='';factConditions.value='';factCautions.value='';
+  try{
+    const d=await jf(`/api/v1/business/product-detail?tenant_id=${tenant}&product_id=${row.id}`);
+    factSpecification.value=d.specification||'';factUsage.value=d.usage||'';factInstallation.value=d.installation_method||'';factConditions.value=d.usage_conditions||'';factCautions.value=d.cautions||'';
+    status.textContent='저장된 FACT를 불러왔습니다. 실제 확인된 값만 수정하세요.';
+  }catch(e){
+    if(String(e.message).includes('404')||String(e.message).includes('not found'))status.textContent='아직 확정 FACT가 없습니다. 모르는 값은 비워두고 확인된 값만 입력하세요.';
+    else status.textContent=`FACT 불러오기 실패: ${e.message}`;
+  }
+}
+async function saveProductFacts(){
+  const row=selectedProductRow();if(!row||factEditorBusy)return;
+  factEditorBusy=true;const btn=document.getElementById('saveFactsBtn'),status=document.getElementById('factEditorStatus');btn.disabled=true;status.textContent='FACT 저장 중...';
+  try{
+    const payload={product_id:row.id,specification:factSpecification.value.trim()||null,usage:factUsage.value.trim()||null,installation_method:factInstallation.value.trim()||null,usage_conditions:factConditions.value.trim()||null,cautions:factCautions.value.trim()||null};
+    await jf(`/api/v1/business/product-detail?tenant_id=${tenant}`,{method:'PUT',body:JSON.stringify(payload)});
+    status.innerHTML='<strong style="color:#16803a">FACT 저장 완료</strong><br>이제 [상세페이지 자동생성]을 눌러 QA와 준비상태를 다시 확인하세요.';
+  }catch(e){status.textContent=`FACT 저장 실패: ${e.message}`;alert(e.message)}
+  finally{factEditorBusy=false;btn.disabled=false}
 }
 async function autoGenerateRC(){
   if(autogenBusy||!workspace||!product.value)return;
@@ -32,45 +99,30 @@ async function autoGenerateRC(){
   try{
     const d=await jf(`/api/v1/detail-page-autogen/generate?tenant_id=${tenant}`,{
       method:'POST',
-      body:JSON.stringify({
-        workspace_id:workspace.id,
-        product_id:product.value,
-        channel:channel.value,
-        page_length:pageLength.value,
-        template_code:template.value||'A_PRACTICAL_TRUST',
-        visual_style:visualStyle.value||'natural',
-        page_strategy:strategy.value||'standard',
-        brand_style_sheet_id:brandStyle.value||null
-      })
+      body:JSON.stringify({workspace_id:workspace.id,product_id:product.value,channel:channel.value,page_length:pageLength.value,template_code:template.value||'A_PRACTICAL_TRUST',visual_style:visualStyle.value||'natural',page_strategy:strategy.value||'standard',brand_style_sheet_id:brandStyle.value||null})
     });
     current=await jf(`/api/v1/detail-pages/jobs/${d.job_id}?tenant_id=${tenant}`);
     selected=null;render();await loadJobs();jobs.value=current.id;
     const hidden=(d.hidden_sections||[]).join(', ')||'없음';
-    if(d.fact_readiness && !d.fact_readiness.ready){
-      status.innerHTML=`${factReadinessHtml(d)}<br>QA <strong>${esc(d.qa_summary)}</strong> · 자동 제외: ${esc(hidden)}`;
-    }else{
-      status.innerHTML=`${factReadinessHtml(d)} · Release Candidate 생성 완료<br>QA <strong>${esc(d.qa_summary)}</strong> · 자동 제외: ${esc(hidden)} · 다음: 검토 후 최종 승인`;
-    }
-  }catch(e){
-    status.textContent=`자동생성 실패: ${e.message}`;
-    alert(e.message);
-  }finally{
-    autogenBusy=false;btn.disabled=false;btn.textContent='⚡ 상세페이지 자동생성';
-  }
+    if(d.fact_readiness && !d.fact_readiness.ready){status.innerHTML=`${factReadinessHtml(d)}<br>QA <strong>${esc(d.qa_summary)}</strong> · 자동 제외: ${esc(hidden)}`}
+    else{status.innerHTML=`${factReadinessHtml(d)} · Release Candidate 생성 완료<br>QA <strong>${esc(d.qa_summary)}</strong> · 자동 제외: ${esc(hidden)} · 다음: 검토 후 최종 승인`}
+  }catch(e){status.textContent=`자동생성 실패: ${e.message}`;alert(e.message)}
+  finally{autogenBusy=false;btn.disabled=false;btn.textContent='⚡ 상세페이지 자동생성'}
+}
+const _baseInitForFactEditor=init;
+init=async function(){
+  await _baseInitForFactEditor();
+  if(product){product.addEventListener('change',()=>loadFactEditor().catch(()=>{}));await loadFactEditor()}
 }
 '''.strip()
 
 
 def inject_autogen_ui(html: str) -> str:
-    """Inject the M06 RC generator without rewriting the existing editor UI."""
+    """Inject the M06 RC generator and safe Product FACT editor."""
     if 'id="autogenBtn"' in html:
         return html
     if _AUTOGEN_BUTTON_MARKER not in html or _AUTOGEN_SCRIPT_MARKER not in html:
         raise RuntimeError("detail-page UI markers changed; autogen injection aborted")
     html = html.replace(_AUTOGEN_BUTTON_MARKER, _AUTOGEN_BUTTON, 1)
-    html = html.replace(
-        _AUTOGEN_SCRIPT_MARKER,
-        f"{_AUTOGEN_SCRIPT}\ninit();\n</script></body></html>",
-        1,
-    )
+    html = html.replace(_AUTOGEN_SCRIPT_MARKER, f"{_AUTOGEN_SCRIPT}\ninit();\n</script></body></html>", 1)
     return html
