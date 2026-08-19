@@ -30,6 +30,8 @@ _AUTOGEN_BUTTON = r'''
 _AUTOGEN_SCRIPT = r'''
 let autogenBusy=false;
 let factEditorBusy=false;
+let factEditorProductId=null;
+let factLoadSerial=0;
 function factReadinessHtml(d){
   const f=d.fact_readiness||{};
   if(f.ready){
@@ -40,6 +42,9 @@ function factReadinessHtml(d){
 }
 function selectedProductRow(){return (products||[]).find(p=>p.id===product.value)||null}
 function showFactEditor(show){const box=document.getElementById('factEditor');if(box)box.style.display=show?'block':'none'}
+function clearFactEditorFields(){
+  factSpecification.value='';factUsage.value='';factInstallation.value='';factConditions.value='';factCautions.value='';
+}
 async function refreshProducts(selectId=null){
   if(!workspace)return;
   products=await jf(`/api/v1/business/products?tenant_id=${tenant}&workspace_id=${workspace.id}`);
@@ -62,50 +67,67 @@ async function ensureRepottingMatProduct(){
       product.value=row.id;
     }
     await loadFactEditor();
-    status.innerHTML='<strong style="color:#1f6b4f">분갈이 매트 테스트 상품 준비 완료</strong><br>확인된 FACT만 입력하고 저장하세요.';
+    if(product.value===row.id){status.innerHTML='<strong style="color:#1f6b4f">분갈이 매트 테스트 상품 준비 완료</strong><br>확인된 FACT만 입력하고 저장하세요.'}
   }catch(e){status.textContent=`테스트 상품 준비 실패: ${e.message}`;alert(e.message)}
   finally{factEditorBusy=false;btn.disabled=false}
 }
 async function loadFactEditor(){
   const row=selectedProductRow(),status=document.getElementById('factEditorStatus');
+  const serial=++factLoadSerial;
+  factEditorProductId=null;
+  clearFactEditorFields();
   if(!row){showFactEditor(false);return}
   showFactEditor(true);
-  factSpecification.value='';factUsage.value='';factInstallation.value='';factConditions.value='';factCautions.value='';
+  status.innerHTML=`<strong>${esc(row.name)}</strong> FACT 불러오는 중...`;
   try{
     const d=await jf(`/api/v1/business/product-detail?tenant_id=${tenant}&product_id=${row.id}`);
+    if(serial!==factLoadSerial||product.value!==row.id)return;
     factSpecification.value=d.specification||'';factUsage.value=d.usage||'';factInstallation.value=d.installation_method||'';factConditions.value=d.usage_conditions||'';factCautions.value=d.cautions||'';
-    status.textContent='저장된 FACT를 불러왔습니다. 실제 확인된 값만 수정하세요.';
+    factEditorProductId=row.id;
+    status.innerHTML=`<strong>${esc(row.name)}</strong> · 저장된 FACT를 불러왔습니다. 실제 확인된 값만 수정하세요.`;
   }catch(e){
-    if(String(e.message).includes('404')||String(e.message).includes('not found'))status.textContent='아직 확정 FACT가 없습니다. 모르는 값은 비워두고 확인된 값만 입력하세요.';
+    if(serial!==factLoadSerial||product.value!==row.id)return;
+    factEditorProductId=row.id;
+    if(String(e.message).includes('404')||String(e.message).includes('not found'))status.innerHTML=`<strong>${esc(row.name)}</strong> · 아직 확정 FACT가 없습니다. 모르는 값은 비워두고 확인된 값만 입력하세요.`;
     else status.textContent=`FACT 불러오기 실패: ${e.message}`;
   }
 }
 async function saveProductFacts(){
   const row=selectedProductRow();if(!row||factEditorBusy)return;
-  factEditorBusy=true;const btn=document.getElementById('saveFactsBtn'),status=document.getElementById('factEditorStatus');btn.disabled=true;status.textContent='FACT 저장 중...';
+  const status=document.getElementById('factEditorStatus');
+  if(factEditorProductId!==row.id){
+    status.innerHTML='<strong style="color:#b42318">저장 차단</strong><br>선택 상품과 FACT 편집 대상이 다릅니다. 현재 상품 FACT를 다시 불러옵니다.';
+    await loadFactEditor();
+    alert('상품 선택이 변경되어 저장을 차단했습니다. 현재 선택 상품의 FACT를 다시 확인해 주세요.');
+    return;
+  }
+  factEditorBusy=true;const btn=document.getElementById('saveFactsBtn');btn.disabled=true;status.innerHTML=`<strong>${esc(row.name)}</strong> FACT 저장 중...`;
   try{
     const payload={product_id:row.id,specification:factSpecification.value.trim()||null,usage:factUsage.value.trim()||null,installation_method:factInstallation.value.trim()||null,usage_conditions:factConditions.value.trim()||null,cautions:factCautions.value.trim()||null};
     await jf(`/api/v1/business/product-detail?tenant_id=${tenant}`,{method:'PUT',body:JSON.stringify(payload)});
-    status.innerHTML='<strong style="color:#16803a">FACT 저장 완료</strong><br>이제 [상세페이지 자동생성]을 눌러 QA와 준비상태를 다시 확인하세요.';
+    if(product.value!==row.id){await loadFactEditor();return}
+    status.innerHTML=`<strong style="color:#16803a">${esc(row.name)} FACT 저장 완료</strong><br>이제 [상세페이지 자동생성]을 눌러 QA와 준비상태를 다시 확인하세요.`;
   }catch(e){status.textContent=`FACT 저장 실패: ${e.message}`;alert(e.message)}
   finally{factEditorBusy=false;btn.disabled=false}
 }
 async function autoGenerateRC(){
   if(autogenBusy||!workspace||!product.value)return;
+  const row=selectedProductRow();
+  if(!row)return;
   autogenBusy=true;
   const btn=document.getElementById('autogenBtn'),status=document.getElementById('autogenStatus');
   btn.disabled=true;btn.textContent='자동생성 중...';
-  status.textContent='FACT 확인 → 조건부 페이지 선택 → 승인 이미지 연결 → QA 실행 중';
+  status.innerHTML=`<strong>${esc(row.name)}</strong> · FACT 확인 → 조건부 페이지 선택 → 승인 이미지 연결 → QA 실행 중`;
   try{
     const d=await jf(`/api/v1/detail-page-autogen/generate?tenant_id=${tenant}`,{
       method:'POST',
-      body:JSON.stringify({workspace_id:workspace.id,product_id:product.value,channel:channel.value,page_length:pageLength.value,template_code:template.value||'A_PRACTICAL_TRUST',visual_style:visualStyle.value||'natural',page_strategy:strategy.value||'standard',brand_style_sheet_id:brandStyle.value||null})
+      body:JSON.stringify({workspace_id:workspace.id,product_id:row.id,channel:channel.value,page_length:pageLength.value,template_code:template.value||'A_PRACTICAL_TRUST',visual_style:visualStyle.value||'natural',page_strategy:strategy.value||'standard',brand_style_sheet_id:brandStyle.value||null})
     });
     current=await jf(`/api/v1/detail-pages/jobs/${d.job_id}?tenant_id=${tenant}`);
     selected=null;render();await loadJobs();jobs.value=current.id;
     const hidden=(d.hidden_sections||[]).join(', ')||'없음';
-    if(d.fact_readiness && !d.fact_readiness.ready){status.innerHTML=`${factReadinessHtml(d)}<br>QA <strong>${esc(d.qa_summary)}</strong> · 자동 제외: ${esc(hidden)}`}
-    else{status.innerHTML=`${factReadinessHtml(d)} · Release Candidate 생성 완료<br>QA <strong>${esc(d.qa_summary)}</strong> · 자동 제외: ${esc(hidden)} · 다음: 검토 후 최종 승인`}
+    if(d.fact_readiness && !d.fact_readiness.ready){status.innerHTML=`<strong>${esc(row.name)}</strong><br>${factReadinessHtml(d)}<br>QA <strong>${esc(d.qa_summary)}</strong> · 자동 제외: ${esc(hidden)}`}
+    else{status.innerHTML=`<strong>${esc(row.name)}</strong><br>${factReadinessHtml(d)} · Release Candidate 생성 완료<br>QA <strong>${esc(d.qa_summary)}</strong> · 자동 제외: ${esc(hidden)} · 다음: 검토 후 최종 승인`}
   }catch(e){status.textContent=`자동생성 실패: ${e.message}`;alert(e.message)}
   finally{autogenBusy=false;btn.disabled=false;btn.textContent='⚡ 상세페이지 자동생성'}
 }
