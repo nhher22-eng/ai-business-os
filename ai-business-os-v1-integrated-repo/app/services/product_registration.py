@@ -13,6 +13,26 @@ class ProductSuggestionError(RuntimeError):
     pass
 
 
+def _empty_suggestions(warning: str) -> dict[str, Any]:
+    return {
+        "category": None,
+        "usage": [],
+        "operating": {
+            "category": None,
+            "usage": [],
+            "sale_price": None,
+            "cost": None,
+        },
+        "marketing": {
+            "features": [],
+            "selling_points": [],
+            "target_customer": [],
+            "content_direction": None,
+        },
+        "warnings": [warning],
+    }
+
+
 def _fallback_suggestions(product_name: str, facts: dict[str, Any]) -> dict[str, Any]:
     """Conservative fallback when a text model is not configured.
 
@@ -69,9 +89,19 @@ def _extract_response_text(payload: dict[str, Any]) -> str:
 def build_ai_suggestions(product_name: str, facts: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     """Build editable suggestions without allowing the model to alter FACT.
 
-    Returns (suggestions, metadata). If no OpenAI key is configured, the
-    deterministic fallback remains fully usable.
+    Suggestions are blocked until source FACT has been explicitly confirmed by
+    the user. If no OpenAI key is configured, the deterministic fallback remains
+    usable after confirmation.
     """
+    if not facts.get("facts_confirmed"):
+        return _empty_suggestions(
+            "상품 FACT를 먼저 사용자 확정해 주세요. 미확정 값으로 AI 제안을 만들지 않습니다."
+        ), {
+            "provider": "blocked-unconfirmed",
+            "model": None,
+            "fact_mutation_allowed": False,
+        }
+
     if not settings.openai_api_key:
         return _fallback_suggestions(product_name, facts), {
             "provider": "safe-fallback",
