@@ -23,6 +23,16 @@ init();
 </script></body></html>'''
 
 
+def inject_product_overview_link(html: str) -> str:
+    if 'href="/products"' in html:
+        return html
+    marker = '<button data-panel="products">상품 업무</button>'
+    addition = marker + '\n      <a href="/products">전체 상품</a>'
+    if marker in html:
+        return html.replace(marker, addition, 1)
+    return html
+
+
 @router.get('/products', response_class=HTMLResponse, include_in_schema=False)
 def products_page():
     return HTMLResponse(HTML, headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})
