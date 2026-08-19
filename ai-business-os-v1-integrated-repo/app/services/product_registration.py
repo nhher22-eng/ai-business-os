@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from typing import Any
 
 import httpx
@@ -33,47 +34,105 @@ def _empty_suggestions(warning: str) -> dict[str, Any]:
     }
 
 
-def _fallback_suggestions(product_name: str, facts: dict[str, Any]) -> dict[str, Any]:
-    """Conservative fallback when a text model is not configured.
+def _fact_note_items(value: Any) -> list[str]:
+    text = str(value or "").strip()
+    if not text:
+        return []
+    return [item.strip() for item in re.split(r"[,/\n]", text) if item.strip()]
 
-    It never creates physical specs. It only turns confirmed FACT into editable
-    operating/marketing suggestions.
+
+def _literal_fact_features(facts: dict[str, Any]) -> list[str]:
+    """Create feature labels only from literal confirmed FACT values.
+
+    No benefit, performance, convenience, target, or usage language is inferred.
     """
-    material = facts.get("primary_material")
-    origin = facts.get("country_of_origin")
-    dimensions = facts.get("dimensions") or {}
-    packaging = facts.get("packaging") or {}
+    result: list[str] = []
+    mapping = (
+        ("model_name", "모델명"),
+        ("primary_material", "주재질"),
+        ("secondary_material", "보조재질"),
+        ("weight", "중량"),
+        ("manufacturer", "제조사"),
+        ("country_of_origin", "원산지"),
+    )
+    for key, label in mapping:
+        value = facts.get(key)
+        if value is not None and str(value).strip():
+            result.append(f"{label}: {str(value).strip()}")
 
-    features = []
-    if material:
-        features.append(f"주재질: {material}")
-    if origin:
-        features.append(f"원산지: {origin}")
-    if any(dimensions.values()):
-        features.append("등록된 실제 치수 정보를 상세 스펙에 활용")
-    if packaging:
-        features.append("등록된 포장 정보를 배송·B2B 포장 판단에 활용")
+    dimensions = facts.get("dimensions") or {}
+    if isinstance(dimensions, dict):
+        for key, label in (("length", "길이"), ("width", "폭"), ("height", "높이")):
+            value = dimensions.get(key)
+            if value is not None and str(value).strip():
+                result.append(f"{label}: {str(value).strip()}")
+
+    certifications = facts.get("certifications") or []
+    if isinstance(certifications, list):
+        result.extend(f"인증: {str(item).strip()}" for item in certifications if str(item).strip())
+
+    result.extend(_fact_note_items(facts.get("fact_notes")))
+
+    deduped: list[str] = []
+    for item in result:
+        if item not in deduped:
+            deduped.append(item)
+    return deduped
+
+
+def _ground_model_suggestions(
+    suggestions: dict[str, Any],
+    *,
+    product_name: str,
+    facts: dict[str, Any],
+) -> dict[str, Any]:
+    """Server-side grounding boundary for model output.
+
+    Category may be suggested from the product name as mutable operating metadata.
+    Usage, benefits, target customers, convenience claims and selling points are
+    suppressed until an explicit evidence field for them exists. Marketing
+    features are rebuilt from literal confirmed FACT instead of trusting model copy.
+    """
+    category = suggestions.get("category")
+    operating = suggestions.get("operating") if isinstance(suggestions.get("operating"), dict) else {}
+    if not isinstance(category, str) or not category.strip():
+        category = operating.get("category")
+    if not isinstance(category, str) or not category.strip():
+        category = None
+    else:
+        category = category.strip()
+
+    warnings = suggestions.get("warnings") if isinstance(suggestions.get("warnings"), list) else []
+    warnings = [str(item) for item in warnings if str(item).strip()]
+    warnings.append(
+        "FACT 근거가 없는 용도·효과·편의성·타깃·판매포인트 제안은 자동 제외했습니다."
+    )
 
     return {
-        "category": None,
+        "category": category,
         "usage": [],
         "operating": {
-            "category": None,
+            "category": category,
             "usage": [],
             "sale_price": None,
             "cost": None,
         },
         "marketing": {
-            "features": features,
+            "features": _literal_fact_features(facts),
             "selling_points": [],
             "target_customer": [],
-            "content_direction": f"{product_name}의 확정 FACT를 우선 사용하고 미확정 사양은 표현하지 않음",
+            "content_direction": f"{product_name}의 확정 FACT만 사용해 사실 중심으로 안내",
         },
-        "warnings": [
-            "텍스트 AI가 연결되지 않아 확정 FACT를 재정리한 안전 제안만 만들었습니다.",
-            "카테고리·용도·가격·마케팅 해석은 사용자 확인 후 적용하세요.",
-        ],
+        "warnings": warnings,
     }
+
+
+def _fallback_suggestions(product_name: str, facts: dict[str, Any]) -> dict[str, Any]:
+    return _ground_model_suggestions(
+        {"category": None, "warnings": ["텍스트 AI가 연결되지 않아 안전 제안으로 전환했습니다."]},
+        product_name=product_name,
+        facts=facts,
+    )
 
 
 def _extract_response_text(payload: dict[str, Any]) -> str:
@@ -87,12 +146,7 @@ def _extract_response_text(payload: dict[str, Any]) -> str:
 
 
 def build_ai_suggestions(product_name: str, facts: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Build editable suggestions without allowing the model to alter FACT.
-
-    Suggestions are blocked until source FACT has been explicitly confirmed by
-    the user. If no OpenAI key is configured, the deterministic fallback remains
-    usable after confirmation.
-    """
+    """Build editable suggestions without allowing the model to alter FACT."""
     if not facts.get("facts_confirmed"):
         return _empty_suggestions(
             "상품 FACT를 먼저 사용자 확정해 주세요. 미확정 값으로 AI 제안을 만들지 않습니다."
@@ -114,11 +168,11 @@ def build_ai_suggestions(product_name: str, facts: dict[str, Any]) -> tuple[dict
 You assist with commerce product registration.
 
 CRITICAL RULES:
-- The CONFIRMED FACT below is canonical truth.
-- Never modify, invent, infer, or fill missing physical/product FACT.
-- You may only propose mutable operating information and subjective marketing interpretation.
+- CONFIRMED FACT is canonical truth.
+- Never invent or infer physical facts, use cases, performance, benefits, ease-of-use, assembly requirements, target customers, or effectiveness.
+- A product name may support a conservative CATEGORY suggestion only.
+- Do not infer "window", "garden", "easy installation", "no assembly", "effective blocking", or similar claims unless explicitly present in CONFIRMED FACT.
 - If evidence is insufficient, return null or an empty list.
-- Do not make exaggerated, unverifiable, medical, safety, certification, performance, or superiority claims.
 - Return JSON only.
 
 Product name: {product_name}
@@ -128,19 +182,9 @@ CONFIRMED FACT:
 Return exactly this shape:
 {{
   "category": string|null,
-  "usage": [string],
-  "operating": {{
-    "category": string|null,
-    "usage": [string],
-    "sale_price": null,
-    "cost": null
-  }},
-  "marketing": {{
-    "features": [string],
-    "selling_points": [string],
-    "target_customer": [string],
-    "content_direction": string|null
-  }},
+  "usage": [],
+  "operating": {{"category": string|null, "usage": [], "sale_price": null, "cost": null}},
+  "marketing": {{"features": [], "selling_points": [], "target_customer": [], "content_direction": string|null}},
   "warnings": [string]
 }}
 """.strip()
@@ -153,10 +197,7 @@ Return exactly this shape:
                     "Authorization": f"Bearer {settings.openai_api_key}",
                     "Content-Type": "application/json",
                 },
-                json={
-                    "model": model,
-                    "input": prompt,
-                },
+                json={"model": model, "input": prompt},
             )
         response.raise_for_status()
         text = _extract_response_text(response.json()).strip()
@@ -167,8 +208,13 @@ Return exactly this shape:
         suggestions = json.loads(text)
         if not isinstance(suggestions, dict):
             raise ProductSuggestionError("suggestion output must be a JSON object")
-        return suggestions, {
-            "provider": "openai",
+        grounded = _ground_model_suggestions(
+            suggestions,
+            product_name=product_name,
+            facts=facts,
+        )
+        return grounded, {
+            "provider": "openai-grounded",
             "model": model,
             "fact_mutation_allowed": False,
         }
