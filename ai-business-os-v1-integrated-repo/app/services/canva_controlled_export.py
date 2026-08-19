@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from copy import deepcopy
 
+from app.services.image_approval_policy import POLICY_VERSION as IMAGE_APPROVAL_POLICY_VERSION
+
 
 TEMPLATE_A_SECTION_PAGE_MAP = {
     "HERO": 1,
@@ -44,7 +46,8 @@ def build_controlled_canva_contract(*, export_payload: dict) -> dict:
     - no model-memory or outside-data fallback is allowed;
     - only enabled sections and product_facts from this export may be used;
     - missing values stay null/empty and must not be invented;
-    - images must come from approved image_asset_id values carried by sections.
+    - images must come from approved image_asset_id values carried by sections;
+    - selling images remain bound to the commerce image approval policy.
     """
     sections = list(export_payload.get("sections") or [])
     by_type = _section_by_type(sections)
@@ -88,6 +91,10 @@ def build_controlled_canva_contract(*, export_payload: dict) -> dict:
             "invent_relation": False,
             "unapproved_image_fallback": False,
             "missing_value_action": "leave_empty_or_review",
+            "image_approval_policy_version": IMAGE_APPROVAL_POLICY_VERSION,
+            "customer_expectation_truth_first": True,
+            "reject_photo_vs_received_mismatch": True,
+            "product_geometry_color_material_components_locked": True,
         },
         "source_snapshot": {
             "product": {
