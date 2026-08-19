@@ -37,3 +37,24 @@ def test_fact_editor_reuses_existing_product_and_rechecks_autogen():
     assert "p.product_code==='REPOTTING-MAT'||p.name==='분갈이 매트'" in patched
     assert '저장 후 상세페이지 자동생성을 다시 실행' in patched
     assert 'FACT 보완 필요' in patched
+
+
+def test_fact_editor_binds_loaded_facts_to_selected_product():
+    patched = inject_autogen_ui(HTML)
+    assert 'let factEditorProductId=null;' in patched
+    assert 'let factLoadSerial=0;' in patched
+    assert 'serial!==factLoadSerial||product.value!==row.id' in patched
+    assert 'factEditorProductId=row.id;' in patched
+
+
+def test_fact_editor_blocks_cross_product_save_after_selection_change():
+    patched = inject_autogen_ui(HTML)
+    assert 'if(factEditorProductId!==row.id)' in patched
+    assert '상품 선택이 변경되어 저장을 차단했습니다.' in patched
+    assert '현재 상품 FACT를 다시 불러옵니다.' in patched
+
+
+def test_product_change_clears_old_fact_fields_before_loading_new_product():
+    patched = inject_autogen_ui(HTML)
+    assert 'clearFactEditorFields();' in patched
+    assert "product.addEventListener('change',()=>loadFactEditor().catch(()=>{}))" in patched
