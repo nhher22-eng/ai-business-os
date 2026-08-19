@@ -23,10 +23,12 @@ from app.product_registration_ui import (
     router as product_registration_ui_router,
 )
 from app.services.fact_grounded_copy_patch import install_fact_grounded_copy_patch
+from app.services.product_master_integration_patch import install_product_master_integration_patch
 from app.services.queue import queue_depth
 
 
 install_fact_grounded_copy_patch()
+install_product_master_integration_patch()
 detail_page_ui.HTML = inject_autogen_ui(detail_page_ui.HTML)
 dashboard_ui.HTML = inject_product_registration_link(dashboard_ui.HTML)
 
