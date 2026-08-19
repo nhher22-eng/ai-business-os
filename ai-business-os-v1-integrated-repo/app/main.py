@@ -11,6 +11,7 @@ from app.api.dashboard_session import router as dashboard_session_router
 from app.api.images import router as images_router
 from app.api.detail_pages import router as detail_pages_router
 from app.api.detail_page_autogen import router as detail_page_autogen_router
+from app.api.canva_controlled_export import router as canva_controlled_export_router
 from app.dashboard_ui import router as dashboard_ui_router
 from app.operations_ui import router as operations_ui_router
 from app.image_studio_ui import router as image_studio_ui_router
@@ -35,6 +36,7 @@ app.include_router(operations_ui_router)
 app.include_router(images_router)
 app.include_router(detail_pages_router)
 app.include_router(detail_page_autogen_router)
+app.include_router(canva_controlled_export_router)
 app.include_router(image_studio_ui_router)
 app.include_router(detail_page_ui.router)
 
