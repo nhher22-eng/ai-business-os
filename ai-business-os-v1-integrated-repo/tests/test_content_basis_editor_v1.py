@@ -34,6 +34,9 @@ def test_product_registration_editor_composes_with_resume_and_image_restore():
     assert "editedBasisPayload" in html
     assert "basis-row" in html
     assert "⚠ 확인 필요" in html
+    assert "✎ 수정" in html
+    assert "focusBasisInput" in html
+    assert "직접 수정 가능한 제안 문장" in html
     assert "기존 상품을 불러와 FACT를 이어서 저장했습니다." in html
     assert "현재 저장된 이미지" in html
     assert "3 · 텍스트 AI 제안 · 확장 상품정보" in html
