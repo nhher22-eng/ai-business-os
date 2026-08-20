@@ -9,6 +9,7 @@ from app.db.detail_page_content_basis import DetailPageContentBasis
 from app.db.models import DetailPageJob, Product, ProductSKU
 from app.db.product_registration import ProductRegistrationProfile
 from app.db.session import SessionLocal
+from app.services.product_image_fact import readiness as image_readiness
 
 
 router = APIRouter(
@@ -43,6 +44,34 @@ def _has_content(profile: ProductRegistrationProfile | None) -> bool:
     return any(bool(v) for v in values)
 
 
+def _master_readiness(
+    db: Session,
+    *,
+    tenant_id: str,
+    product_id: str,
+    profile: ProductRegistrationProfile | None,
+) -> dict:
+    facts_confirmed = bool(profile and profile.facts_confirmed)
+    primary = bool(profile and profile.primary_image_asset_id)
+    images = image_readiness(db, tenant_id=tenant_id, product_id=product_id)
+
+    missing: list[str] = []
+    if not facts_confirmed:
+        missing.append("기본 FACT")
+    missing.extend(images.get("missing_labels") or [])
+    if images.get("ready") and not primary:
+        missing.append("대표 이미지 연결")
+
+    return {
+        "ready": facts_confirmed and bool(images.get("ready")) and primary,
+        "facts_confirmed": facts_confirmed,
+        "images_ready": bool(images.get("ready")),
+        "missing_image_slots": images.get("missing_slots") or [],
+        "missing_labels": missing,
+        "has_primary_image": primary,
+    }
+
+
 @router.get("/products")
 def product_overview(
     workspace_id: str = Query(...),
@@ -66,6 +95,12 @@ def product_overview(
                 ProductRegistrationProfile.product_id == product.id,
             )
         )
+        master = _master_readiness(
+            db,
+            tenant_id=tenant_id,
+            product_id=product.id,
+            profile=profile,
+        )
         sku_count = db.scalar(
             select(func.count(ProductSKU.id)).where(
                 ProductSKU.tenant_id == tenant_id,
@@ -86,7 +121,7 @@ def product_overview(
                 DetailPageJob.product_id == product.id,
             )
         ) or 0
-        primary = bool(profile and profile.primary_image_asset_id)
+        primary = master["has_primary_image"]
         additional = len(profile.additional_image_asset_ids or []) if profile else 0
         result.append(
             {
@@ -95,7 +130,11 @@ def product_overview(
                 "product_code": product.product_code,
                 "status": product.status,
                 "sales_channel": product.sales_channel,
-                "facts_confirmed": bool(profile and profile.facts_confirmed),
+                "master_ready": master["ready"],
+                "master_missing_labels": master["missing_labels"],
+                "facts_confirmed": master["facts_confirmed"],
+                "images_ready": master["images_ready"],
+                "missing_image_slots": master["missing_image_slots"],
                 "has_primary_image": primary,
                 "additional_image_count": additional,
                 "image_count": (1 if primary else 0) + additional,
