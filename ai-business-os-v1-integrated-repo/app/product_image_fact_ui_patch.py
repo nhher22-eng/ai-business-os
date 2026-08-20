@@ -48,9 +48,16 @@ function imageFactConfidence(item){
 }
 function renderImageFactReadiness(r){
   const el=document.getElementById('imageFactReadiness');
-  if(!r){el.textContent='';return;}
-  if(r.ready){el.innerHTML='<span class="ok">필수 이미지 FACT 완료 · 45도 우측 + 정면</span>';}
-  else{el.innerHTML=`<span class="warn">필수 미완료: ${(r.missing_labels||[]).join(', ')}</span>`;}
+  const textCard=document.getElementById('aiCard');
+  if(!r){el.textContent='';if(textCard)textCard.classList.add('hidden');return;}
+  if(r.ready){
+    el.innerHTML='<span class="ok">필수 이미지 FACT 완료 · 45도 우측 + 정면</span>';
+    if(textCard)textCard.classList.remove('hidden');
+  }else{
+    el.innerHTML=`<span class="warn">필수 미완료: ${(r.missing_labels||[]).join(', ')}</span>`;
+    if(textCard)textCard.classList.add('hidden');
+    const imagePlanCard=document.getElementById('imagePlanCard');if(imagePlanCard)imagePlanCard.classList.add('hidden');
+  }
 }
 function renderImageFacts(data){
   renderImageFactReadiness(data.readiness);
@@ -140,11 +147,16 @@ def inject_product_image_fact_ui(html: str) -> str:
     if 'id="imageFactCard"' not in html and marker in html:
         html = html.replace(marker, IMAGE_FACT_CARD + "\n" + marker, 1)
 
-    # Existing saveFacts reveals the legacy image card. Reveal the new FACT card as well.
-    old = "document.getElementById('imageCard').classList.remove('hidden');document.getElementById('aiCard').classList.remove('hidden');"
-    new = "document.getElementById('imageCard').classList.remove('hidden');document.getElementById('imageFactCard').classList.remove('hidden');document.getElementById('aiCard').classList.remove('hidden');"
-    if old in html:
-        html = html.replace(old, new, 1)
+    # Step 1 reveals only Step 2. Step 3 opens only when required Image FACT is ready.
+    old_resume = "function openNextSteps(){document.getElementById('imageCard').classList.remove('hidden');document.getElementById('aiCard').classList.remove('hidden')}"
+    new_resume = "function openNextSteps(){document.getElementById('imageCard').classList.remove('hidden');document.getElementById('imageFactCard').classList.remove('hidden');document.getElementById('aiCard').classList.add('hidden')}"
+    if old_resume in html:
+        html = html.replace(old_resume, new_resume, 1)
+
+    old_legacy = "document.getElementById('imageCard').classList.remove('hidden');document.getElementById('aiCard').classList.remove('hidden');"
+    new_legacy = "document.getElementById('imageCard').classList.remove('hidden');document.getElementById('imageFactCard').classList.remove('hidden');document.getElementById('aiCard').classList.add('hidden');"
+    if old_legacy in html:
+        html = html.replace(old_legacy, new_legacy, 1)
 
     if 'function renderImageFacts(data)' not in html:
         html = html.replace('</script>', IMAGE_FACT_SCRIPT + '\n</script>', 1)
