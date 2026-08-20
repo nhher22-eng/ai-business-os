@@ -130,6 +130,7 @@ def product_overview(
                 "product_code": product.product_code,
                 "status": product.status,
                 "sales_channel": product.sales_channel,
+                "description": product.description,
                 "master_ready": master["ready"],
                 "master_missing_labels": master["missing_labels"],
                 "facts_confirmed": master["facts_confirmed"],
