@@ -47,8 +47,7 @@ def inject_async_restore_ui(html: str) -> str:
     # Make queued/processing states visible and poll until work finishes.
     html = html.replace(
         "const bgText=item.slot_type==='LIFESTYLE'?'배경 보존':(item.background_removed?'배경제거 완료':'배경제거 대기');",
-        "const processing=['processing_queued','processing'].includes(item.status);const bgText=processing?'자동 처리 중...':(item.slot_type==='LIFESTYLE'?'배경 보존':(item.background_removed?'배경제거 완료':'배경제거 대기'));
-",
+        "const processing=['processing_queued','processing'].includes(item.status);const bgText=processing?'자동 처리 중...':(item.slot_type==='LIFESTYLE'?'배경 보존':(item.background_removed?'배경제거 완료':'배경제거 대기'));",
         1,
     )
     html = html.replace(
