@@ -44,6 +44,7 @@ from app.product_registration_async_restore_ui_patch import inject_async_restore
 from app.product_registration_readiness_ui_patch import inject_product_registration_readiness_ui
 from app.services.fact_grounded_copy_patch import install_fact_grounded_copy_patch
 from app.services.product_master_integration_patch import install_product_master_integration_patch
+from app.services.product_master_release_gate_patch import install_product_master_release_gate
 from app.services.product_registration_safety_patch import install_product_registration_safety_patch
 from app.services.product_image_fact_oom_patch import install_product_image_fact_oom_patch
 from app.services.product_image_final_policy_patch import install_product_image_final_policy_patch
@@ -52,6 +53,7 @@ from app.services.queue import queue_depth
 
 install_fact_grounded_copy_patch()
 install_product_master_integration_patch()
+install_product_master_release_gate()
 install_product_registration_safety_patch()
 install_product_image_fact_oom_patch()
 install_product_image_final_policy_patch()
