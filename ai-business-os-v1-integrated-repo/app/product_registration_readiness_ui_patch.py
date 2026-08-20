@@ -61,6 +61,11 @@ def inject_product_registration_readiness_ui(html: str) -> str:
         "const processing=['processing_queued','processing'].includes(item.status);const bgText=processing?'자동 처리 중...':(['DETAIL','LIFESTYLE'].includes(item.slot_type)?(item.slot_type==='LIFESTYLE'?'배경 유지 · 최종본':'부분상세 · 최종본'):(item.background_removed?'누끼 + 표준 Fit 완료':'표준화 대기'));",
         1,
     )
+    html = html.replace(
+        "const rawText=item.raw_available?'촬영 원본 임시보관':(item.raw_deleted_at?'촬영 원본 삭제 완료':'촬영 원본 없음');",
+        "const rawText=item.raw_available?'촬영 원본 임시보관':(['DETAIL','LIFESTYLE'].includes(item.slot_type)&&item.fact_available?'최종본만 보존':(item.raw_deleted_at?'촬영 원본 삭제 완료':'촬영 원본 없음'));",
+        1,
+    )
 
     # The old UI declared completion immediately after AI suggestions. Readiness owns completion now.
     html = html.replace(
