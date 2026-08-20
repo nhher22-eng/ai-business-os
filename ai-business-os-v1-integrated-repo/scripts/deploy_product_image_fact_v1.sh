@@ -60,14 +60,16 @@ echo
 echo "[9/10] Checking product image FACT routes and migration"
 printf 'dashboard HTTP ' && curl -fsS -o /dev/null -w '%{http_code}\n' http://localhost:8000/dashboard
 printf 'product-registration HTTP ' && curl -fsS -o /dev/null -w '%{http_code}\n' http://localhost:8000/product-registration
-python - <<'PY'
+# The EC2 host intentionally does not require a system Python install.
+# Run the OpenAPI validation inside the already-built API container instead.
+docker compose exec -T api python - <<'PY'
 import urllib.request
 spec = urllib.request.urlopen('http://localhost:8000/openapi.json', timeout=10).read().decode('utf-8')
 required = [
-    '/api/v1/product-image-facts/products/{product_id}/batch-upload',
+    '/api/v1/product-image-facts/products/{product_id}/batch',
     '/api/v1/product-image-facts/products/{product_id}',
-    '/api/v1/product-image-facts/items/{item_id}',
-    '/api/v1/product-image-facts/products/{product_id}/confirm',
+    '/api/v1/product-image-facts/images/{image_fact_id}',
+    '/api/v1/product-image-facts/images/{image_fact_id}/confirm',
 ]
 missing = [path for path in required if path not in spec]
 if missing:
