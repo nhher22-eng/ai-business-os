@@ -51,7 +51,7 @@ function imagePlanBadge(item){
 }
 function imagePlanRow(item,category,index){
   const basis=(item.basis||[]).join(' · ');
-  const checked=item.status==='fact'?'checked':'checked';
+  const checked=item.status==='fact'?'checked':'';
   const needsRef=item.required_reference?`<div class="warn" style="margin-top:7px">추가 기준 이미지 필요: ${escapeHtml(item.required_reference)}</div>`:'';
   const note=item.note?`<div class="muted" style="margin-top:7px">${escapeHtml(item.note)}</div>`:'';
   return `<div class="image-plan-row" data-category="${category}" data-index="${index}" style="border:1px solid #35445a;border-radius:12px;padding:12px;margin-top:9px;background:${item.status==='fact'?'#0b1c1a':'#211c10'}">
@@ -116,13 +116,12 @@ async function confirmImagePlans(){
     s.innerHTML=`<span class="ok">확장 상품정보 저장 완료 · 이미지 기획 ${data.confirmed_count}개 확정 · 실제 이미지 생성은 등록 완료 조건이 아닙니다.</span>`;
     document.getElementById('imagePlanActions').classList.add('hidden');
     await checkRegistrationReadiness();
-    const done=document.getElementById('doneCard');if(done)done.classList.remove('hidden');
   }catch(e){s.textContent=String(e)}
 }
 async function restoreConfirmedImagePlans(){
   if(!productId)return;try{
     const data=await api(`/api/v1/product-registration/products/${productId}/image-plans?tenant_id=${tenant}`);
-    if((data.plans||[]).length){document.getElementById('imagePlanCard').classList.remove('hidden');renderImagePlans({plans:data.plans});document.getElementById('imagePlanActions').classList.add('hidden');document.getElementById('imagePlanStatus').innerHTML='<span class="ok">저장된 확장 이미지 기획을 불러왔습니다.</span>';}
+    if(data.policy?.plans_confirmed){document.getElementById('imagePlanCard').classList.remove('hidden');renderImagePlans({plans:data.plans||[]});document.getElementById('imagePlanActions').classList.add('hidden');document.getElementById('imagePlanStatus').innerHTML='<span class="ok">저장된 확장 이미지 기획을 불러왔습니다.</span>';}
   }catch(_){ }
 }
 
@@ -140,7 +139,7 @@ document.addEventListener('change',e=>{if(e.target?.classList?.contains('image-p
 
 def inject_product_image_planning_ui(html: str) -> str:
     if 'id="imagePlanCard"' not in html:
-        marker = '  <section class="card hidden" id="doneCard">'
+        marker = '<section class="card hidden" id="doneCard">'
         if marker not in html:
             raise RuntimeError("product registration done card marker not found")
         html = html.replace(marker, IMAGE_PLAN_CARD + "\n" + marker, 1)
