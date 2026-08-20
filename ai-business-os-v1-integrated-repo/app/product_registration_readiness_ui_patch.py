@@ -3,12 +3,20 @@ from __future__ import annotations
 
 READINESS_SCRIPT = r'''
 
+function setRegistrationNextActions(){
+  if(!productId)return;
+  const detail=document.getElementById('nextDetailPage');
+  const image=document.getElementById('nextImageStudio');
+  if(detail)detail.href=`/detail-pages?product_id=${encodeURIComponent(productId)}`;
+  if(image)image.href=`/image-studio?product_id=${encodeURIComponent(productId)}`;
+}
 function renderRegistrationReadiness(r){
   const el=document.getElementById('registrationReadinessStatus');
   const done=document.getElementById('doneCard');
   if(!r){if(el)el.textContent='';if(done)done.classList.add('hidden');return;}
   if(r.ready){
     if(el)el.innerHTML='<span class="ok">✓ Product Master 핵심 등록 완료 · FACT + 필수 이미지 확정</span>';
+    setRegistrationNextActions();
     if(done)done.classList.remove('hidden');
   }else{
     const missing=(r.missing_labels||[]).join(', ')||'필수 등록정보';
@@ -73,6 +81,16 @@ def inject_product_registration_readiness_ui(html: str) -> str:
         "await checkRegistrationReadiness();",
         1,
     )
+
+    old_done_actions = '<div class="actions"><a href="/dashboard" class="secondary" style="padding:11px 16px;border-radius:10px">대시보드로 돌아가기</a></div>'
+    new_done_actions = '''<div class="actions">
+      <a id="nextDetailPage" href="/detail-pages" class="secondary" style="padding:11px 16px;border-radius:10px">상세페이지 만들기</a>
+      <a id="nextImageStudio" href="/image-studio" class="secondary" style="padding:11px 16px;border-radius:10px">AI 이미지 생성</a>
+      <a href="/products" class="secondary" style="padding:11px 16px;border-radius:10px">전체 상품</a>
+      <a href="/dashboard" class="secondary" style="padding:11px 16px;border-radius:10px">대시보드</a>
+    </div>'''
+    if old_done_actions in html:
+        html = html.replace(old_done_actions, new_done_actions, 1)
 
     if 'function checkRegistrationReadiness()' not in html:
         html = html.replace('</script>', READINESS_SCRIPT + '\n</script>', 1)
