@@ -8,7 +8,9 @@ def test_product_image_fact_deploy_script_has_safety_contract():
     assert "pytest -q" in text
     assert "docker compose run --rm migrate" in text
     assert "0010_product_image_fact" in text
-    assert "/api/v1/product-image-facts/products/{product_id}/batch-upload" in text
+    assert "/api/v1/product-image-facts/products/{product_id}/batch" in text
+    assert "/api/v1/product-image-facts/images/{image_fact_id}" in text
+    assert "/api/v1/product-image-facts/images/{image_fact_id}/confirm" in text
     assert "health/live" in text
     assert "health/ready" in text
     assert "docker compose exec -T api python" in text
