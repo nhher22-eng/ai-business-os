@@ -67,7 +67,40 @@ docker compose exec -T api python - <<'PY'
 from app.main import app
 from app import product_registration_ui
 
-paths = {route.path for route in app.routes}
+
+def collect_route_paths(routes):
+    """Collect paths across FastAPI/Starlette route wrappers safely.
+
+    Newer FastAPI versions may expose internal included-router objects in
+    app.routes that do not themselves have a .path attribute. Traverse any
+    nested routes/router.routes instead of assuming every entry is an APIRoute.
+    """
+    paths = set()
+    stack = list(routes)
+    seen = set()
+    while stack:
+        route = stack.pop()
+        marker = id(route)
+        if marker in seen:
+            continue
+        seen.add(marker)
+
+        path = getattr(route, "path", None)
+        if path:
+            paths.add(path)
+
+        nested = getattr(route, "routes", None)
+        if nested:
+            stack.extend(list(nested))
+
+        router = getattr(route, "router", None)
+        router_routes = getattr(router, "routes", None) if router is not None else None
+        if router_routes:
+            stack.extend(list(router_routes))
+    return paths
+
+
+paths = collect_route_paths(app.routes)
 required = {
     "/api/v1/product-registration/products/{product_id}/readiness",
     "/api/v1/product-registration/products/{product_id}/image-plan-suggestions",
