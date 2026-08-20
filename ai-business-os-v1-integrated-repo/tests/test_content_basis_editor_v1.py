@@ -36,9 +36,11 @@ def test_product_registration_editor_composes_with_resume_and_image_restore():
     assert "⚠ 확인 필요" in html
     assert "기존 상품을 불러와 FACT를 이어서 저장했습니다." in html
     assert "현재 저장된 이미지" in html
+    assert "3 · 텍스트 AI 제안 · 확장 상품정보" in html
+    assert "선택한 텍스트 정보 확정" in html
 
 
-def test_product_registration_separates_editor_guidance_from_product_notes():
+def test_product_registration_uses_final_text_extension_groups_without_category():
     html = product_registration_ui.HTML
     html = inject_product_registration_resume(html)
     html = inject_product_image_restore(html)
@@ -46,8 +48,14 @@ def test_product_registration_separates_editor_guidance_from_product_notes():
 
     assert "AI 제안 편집 안내" in html
     assert "상품 관련 참고·주의" in html
-    assert "product_notes" in html
-    assert "productNoteItems" in html
+    assert "basisGroup('용도','usage'" in html
+    assert "basisGroup('특징','features'" in html
+    assert "basisGroup('판매 포인트','selling_points'" in html
+    assert "basisGroup('타깃','target_customer'" in html
+    assert "basisGroup('콘텐츠 방향','content_direction'" in html
+    assert "basisGroup('상품 관련 참고·주의','product_notes'" in html
+    assert "basisGroup('카테고리','category'" not in html
+    assert "operating_info:{usage}" in html
     assert "marketing_info:{features,selling_points:selling,target_customer:targets,content_direction:direction,product_notes:productNotes}" in html
 
 

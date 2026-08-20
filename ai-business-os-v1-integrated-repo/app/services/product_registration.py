@@ -16,12 +16,13 @@ class ProductSuggestionError(RuntimeError):
 
 def _empty_suggestions(warning: str) -> dict[str, Any]:
     editor = {
-        "category": None,
+        "category": None,  # legacy compatibility only; final UI does not expose it
         "usage": [],
         "features": [],
         "selling_points": [],
         "target_customer": [],
         "content_direction": None,
+        "product_notes": [],
     }
     return {
         "category": None,
@@ -32,6 +33,7 @@ def _empty_suggestions(warning: str) -> dict[str, Any]:
             "selling_points": [],
             "target_customer": [],
             "content_direction": None,
+            "product_notes": [],
         },
         "editor": editor,
         "warnings": [warning],
@@ -46,7 +48,7 @@ def _fact_note_items(value: Any) -> list[str]:
 
 
 def _literal_fact_features(facts: dict[str, Any]) -> list[str]:
-    """Create literal labels from user-confirmed FACT without adding benefits."""
+    """Create literal Korean labels from user-confirmed FACT without adding benefits."""
     result: list[str] = []
     mapping = (
         ("model_name", "모델명"),
@@ -120,7 +122,7 @@ def _review_reason(value: str) -> str:
     )
     if any(word in text for word in sensitive):
         return "효과·성능·편의성 표현일 수 있어 실제 상품 근거 확인이 필요합니다."
-    return "AI가 제안한 아이디어입니다. 실제 상품에 맞는지 확인 후 수정·채택하세요."
+    return "확정 FACT를 바탕으로 한 마케팅 해석 제안입니다. 실제 판매 방향에 맞는지 확인 후 수정·채택하세요."
 
 
 def _editor_suggestions(
@@ -129,64 +131,57 @@ def _editor_suggestions(
     product_name: str,
     facts: dict[str, Any],
 ) -> dict[str, Any]:
-    """Preserve AI ideas while clearly separating confirmed FACT from hypotheses.
+    """Build the final text-extension editor without inventing product FACT.
 
-    Nothing in the editor payload mutates FACT. FACT-derived rows are marked
-    confirmed; model-derived rows stay visible as review candidates so the user
-    can edit, delete, or explicitly adopt them.
+    Physical/product-feature rows come only from confirmed FACT. The model may
+    propose marketing interpretation (selling points, target customers, content
+    direction) and explicitly grounded usage restatements, but those remain
+    review candidates until the user confirms them.
     """
     operating = suggestions.get("operating") if isinstance(suggestions.get("operating"), dict) else {}
     marketing = suggestions.get("marketing") if isinstance(suggestions.get("marketing"), dict) else {}
-
-    category = suggestions.get("category") or operating.get("category")
-    category = str(category).strip() if category is not None else ""
-    category_row = (
-        _candidate(
-            category,
-            source="ai",
-            status="suggested",
-            reason="상품명과 입력정보를 바탕으로 한 운영 카테고리 제안입니다. 필요하면 수정하거나 비워둘 수 있습니다.",
-        )
-        if category
-        else None
-    )
 
     fact_features = [
         _candidate(
             item,
             source="fact",
             status="confirmed",
-            reason="사용자가 확정한 상품 FACT에서 가져왔습니다.",
+            reason="사용자가 확정한 상품 FACT에서 직접 가져왔습니다.",
         )
         for item in _literal_fact_features(facts)
     ]
-    fact_values = {row["value"] for row in fact_features}
 
-    raw_features = _clean_list(marketing.get("features"))
-    ai_features = [
-        _candidate(item, source="ai", status="review", reason=_review_reason(item))
-        for item in raw_features
-        if item not in fact_values
-    ]
-
+    # Product physical features must never be generated from hypotheses.
+    # Ignore model-generated feature claims entirely; only literal confirmed FACT is shown here.
     usage = _clean_list(suggestions.get("usage")) or _clean_list(operating.get("usage"))
     selling_points = _clean_list(marketing.get("selling_points"))
     targets = _clean_list(marketing.get("target_customer"))
     direction = str(marketing.get("content_direction") or "").strip()
+    product_notes = _clean_list(marketing.get("product_notes"))
 
     editor = {
-        "category": category_row,
+        "category": None,
         "usage": [
-            _candidate(item, source="ai", status="review", reason=_review_reason(item))
+            _candidate(
+                item,
+                source="ai",
+                status="review",
+                reason="확정 FACT/상품명에 근거해 다시 표현한 용도 후보입니다. 실제 용도와 일치하는지 확인하세요.",
+            )
             for item in usage
         ],
-        "features": fact_features + ai_features,
+        "features": fact_features,
         "selling_points": [
             _candidate(item, source="ai", status="review", reason=_review_reason(item))
             for item in selling_points
         ],
         "target_customer": [
-            _candidate(item, source="ai", status="review", reason=_review_reason(item))
+            _candidate(
+                item,
+                source="ai",
+                status="review",
+                reason="상품 FACT를 바꾸지 않는 고객군/판매 방향 제안입니다. 실제 타깃에 맞게 수정·채택하세요.",
+            )
             for item in targets
         ],
         "content_direction": (
@@ -194,34 +189,42 @@ def _editor_suggestions(
                 direction,
                 source="ai",
                 status="review",
-                reason="상세페이지·이미지·광고에 재사용할 수 있는 콘텐츠 방향 아이디어입니다.",
+                reason="확정 FACT를 어떻게 설명할지에 대한 콘텐츠 방향 제안입니다.",
             )
             if direction
             else None
         ),
+        "product_notes": [
+            _candidate(
+                item,
+                source="ai",
+                status="review",
+                reason="새 사실을 단정하는 항목이 아니라, 판매 전 추가 확인이 필요한 정보 제안입니다.",
+            )
+            for item in product_notes
+        ],
     }
 
-    # Legacy fields remain for API compatibility. Only explicitly applied editor
-    # values are persisted by the UI; these fields are not auto-applied.
     return {
-        "category": category or None,
+        "category": None,
         "usage": usage,
         "operating": {
-            "category": category or None,
+            "category": None,
             "usage": usage,
             "sale_price": None,
             "cost": None,
         },
         "marketing": {
-            "features": [row["value"] for row in fact_features] + raw_features,
+            "features": [row["value"] for row in fact_features],
             "selling_points": selling_points,
             "target_customer": targets,
             "content_direction": direction or None,
+            "product_notes": product_notes,
         },
         "editor": editor,
         "warnings": [
-            "노란색 AI 제안은 아이디어입니다. 실제 상품에 맞게 수정·삭제·채택한 뒤 적용하세요.",
-            "초록색 FACT 항목도 콘텐츠에서 사용하지 않을 경우 선택 해제할 수 있지만 원천 FACT 자체는 변경되지 않습니다.",
+            "AI 제안은 확정 FACT를 바꾸지 않는 설명·마케팅 해석입니다. 실제 상품에 맞는 내용만 사용자가 수정·삭제·채택합니다.",
+            "상품의 재질·구조·성능·내구성·효과·치수·구성품 등 물리적 사실은 AI가 새로 만들지 않습니다.",
         ],
     }
 
@@ -236,13 +239,12 @@ def _ground_model_suggestions(
 def _fallback_suggestions(product_name: str, facts: dict[str, Any]) -> dict[str, Any]:
     return _editor_suggestions(
         {
-            "category": None,
             "usage": [],
             "marketing": {
-                "features": [],
                 "selling_points": [],
                 "target_customer": [],
                 "content_direction": None,
+                "product_notes": [],
             },
         },
         product_name=product_name,
@@ -261,7 +263,7 @@ def _extract_response_text(payload: dict[str, Any]) -> str:
 
 
 def build_ai_suggestions(product_name: str, facts: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Generate a broad idea set, then label rather than hide uncertain ideas."""
+    """Generate Korean, FACT-first text-extension suggestions for human confirmation."""
     if not facts.get("facts_confirmed"):
         return _empty_suggestions(
             "상품 FACT를 먼저 사용자 확정해 주세요. 미확정 값으로 AI 제안을 만들지 않습니다."
@@ -282,34 +284,36 @@ def build_ai_suggestions(product_name: str, facts: dict[str, Any]) -> tuple[dict
 
     model = os.getenv("OPENAI_TEXT_MODEL", "gpt-4.1-mini")
     prompt = f"""
-You are brainstorming editable commerce content ideas for product registration.
+당신은 상품등록용 텍스트 확장정보 제안 도우미입니다.
+반드시 한국어로만 답하고 JSON만 반환하세요.
 
-IMPORTANT:
-- CONFIRMED FACT is canonical truth and must never be changed or contradicted.
-- Generate useful ideas for category, possible usage, features, selling points,
-  target customers, and content direction.
-- Ideas that go beyond CONFIRMED FACT are allowed as hypotheses because the UI
-  will flag them for human review. Do not present them as verified facts.
-- Avoid medical, legal, certification, safety guarantees, fabricated numeric
-  performance claims, fake reviews, or superiority claims.
-- Return JSON only.
+핵심 원칙:
+- CONFIRMED FACT는 유일한 상품 사실입니다. 절대 변경·추가·추측하지 마세요.
+- 재질, 구조, 내구성, 성능, 효과, 치수, 구성품, 안전성, 인증, 사용 제한 같은 물리적 사실을 새로 만들지 마세요.
+- features(특징)는 생성하지 마세요. 특징은 시스템이 CONFIRMED FACT에서 직접 구성합니다.
+- usage(용도)는 상품명 또는 CONFIRMED FACT에 용도가 명시적으로 드러나는 경우에만 짧게 다시 표현하세요. 근거가 없으면 빈 배열로 두세요.
+- selling_points(판매 포인트)는 CONFIRMED FACT를 과장하지 않고 설명하는 마케팅 해석만 제안하세요.
+- target_customer(타깃)는 상품 FACT를 바꾸지 않는 고객군 가설이며 사용자가 검토할 제안입니다.
+- content_direction(콘텐츠 방향)은 확정 FACT를 어떻게 보여주고 설명할지에 대한 방향만 제안하세요.
+- product_notes(상품 관련 참고·주의)는 새로운 사실을 단정하지 말고, 판매 전에 사용자가 추가 확인하면 좋은 정보가 있을 때만 '추가 확인 필요: ...' 형태로 작성하세요. 없으면 빈 배열입니다.
+- 과장광고, 비교우위, 보장, 가짜 리뷰, 의료/법률/인증/안전 보장은 금지합니다.
 
-Product name: {product_name}
+상품명: {product_name}
 CONFIRMED FACT:
 {json.dumps(facts, ensure_ascii=False)}
 
-Return exactly this shape:
+정확히 다음 형태로 반환하세요:
 {{
-  "category": string|null,
-  "usage": [string],
-  "operating": {{"category": string|null, "usage": [string], "sale_price": null, "cost": null}},
+  "usage": ["한국어"],
+  "operating": {{"category": null, "usage": ["한국어"], "sale_price": null, "cost": null}},
   "marketing": {{
-    "features": [string],
-    "selling_points": [string],
-    "target_customer": [string],
-    "content_direction": string|null
+    "features": [],
+    "selling_points": ["한국어"],
+    "target_customer": ["한국어"],
+    "content_direction": "한국어 또는 null",
+    "product_notes": ["추가 확인 필요: ..."]
   }},
-  "warnings": [string]
+  "warnings": []
 }}
 """.strip()
 
@@ -337,10 +341,8 @@ Return exactly this shape:
             product_name=product_name,
             facts=facts,
         )
-        model_warnings = suggestions.get("warnings") if isinstance(suggestions.get("warnings"), list) else []
-        result["warnings"].extend(str(x) for x in model_warnings if str(x).strip())
         return result, {
-            "provider": "openai-editable",
+            "provider": "openai-fact-first-ko",
             "model": model,
             "fact_mutation_allowed": False,
         }
