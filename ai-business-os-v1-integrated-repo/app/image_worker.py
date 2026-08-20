@@ -10,8 +10,21 @@ from app.db.models import ImageGenerationJob
 from app.db.product_image_fact import ProductImageFact
 from app.db.session import SessionLocal
 from app.services.image_studio import ImageStudioError, ProviderNotConfigured, generate_stage
-from app.services.product_image_fact import ProductImageFactError, apply_slot_policy, classify_slot, process_row
-from app.services.image_studio import resolve_media_uri
+from app.services.product_image_fact_oom_patch import install_product_image_fact_oom_patch
+from app.services.product_image_final_policy_patch import install_product_image_final_policy_patch
+
+# The image worker is a separate process and does not import app.main. Install
+# the same processing boundaries here before binding product-image functions.
+install_product_image_fact_oom_patch()
+install_product_image_final_policy_patch()
+
+from app.services.product_image_fact import (  # noqa: E402
+    ProductImageFactError,
+    apply_slot_policy,
+    classify_slot,
+    process_row,
+)
+from app.services.image_studio import resolve_media_uri  # noqa: E402
 
 POLL_SECONDS = max(0.2, float(os.getenv("AIOS_IMAGE_WORKER_POLL_SECONDS", "1.0")))
 STALE_SECONDS = max(300, int(os.getenv("AIOS_IMAGE_FINAL_STALE_SECONDS", "900")))

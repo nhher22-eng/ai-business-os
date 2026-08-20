@@ -43,6 +43,7 @@ from app.services.fact_grounded_copy_patch import install_fact_grounded_copy_pat
 from app.services.product_master_integration_patch import install_product_master_integration_patch
 from app.services.product_registration_safety_patch import install_product_registration_safety_patch
 from app.services.product_image_fact_oom_patch import install_product_image_fact_oom_patch
+from app.services.product_image_final_policy_patch import install_product_image_final_policy_patch
 from app.services.queue import queue_depth
 
 
@@ -50,6 +51,7 @@ install_fact_grounded_copy_patch()
 install_product_master_integration_patch()
 install_product_registration_safety_patch()
 install_product_image_fact_oom_patch()
+install_product_image_final_policy_patch()
 detail_page_ui.HTML = inject_autogen_ui(detail_page_ui.HTML)
 detail_page_ui.HTML = inject_detail_page_content_basis_editor(detail_page_ui.HTML)
 detail_page_ui.HTML = inject_detail_page_product_selection(detail_page_ui.HTML)

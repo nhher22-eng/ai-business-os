@@ -19,17 +19,17 @@ def test_front_is_required_but_not_primary():
     assert policy["raw_retention_policy"] == "delete_on_confirm"
 
 
-def test_lifestyle_keeps_real_background_and_raw_capture():
+def test_lifestyle_keeps_real_background_but_only_final_asset_is_canonical():
     policy = slot_policy("LIFESTYLE")
     assert policy["required"] is False
     assert policy["primary"] is False
     assert policy["remove_background"] is False
     assert policy["keep_background"] is True
-    assert policy["raw_retention_policy"] == "keep"
+    assert policy["raw_retention_policy"] == "final_only"
 
 
-def test_detail_defaults_to_background_removal_and_raw_cleanup():
+def test_detail_is_preserved_as_final_use_image_without_forced_cutout():
     policy = slot_policy("DETAIL")
-    assert policy["remove_background"] is True
-    assert policy["keep_background"] is False
-    assert policy["raw_retention_policy"] == "delete_on_confirm"
+    assert policy["remove_background"] is False
+    assert policy["keep_background"] is True
+    assert policy["raw_retention_policy"] == "final_only"
