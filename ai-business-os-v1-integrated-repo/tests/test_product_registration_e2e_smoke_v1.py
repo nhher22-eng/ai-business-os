@@ -18,7 +18,7 @@ from app.api.product_registration import (
 from app.db.models import Base, BusinessWorkspace, ImageReferenceAsset
 from app.db.product_image_fact import ProductImageFact
 from app.db.product_registration import ProductRegistrationProfile
-from app.services import product_image_fact
+from app.services import image_studio, product_image_fact
 from app.services.product_image_fact import confirm_image_fact, create_upload_row
 from app.services.product_image_final_policy_patch import install_product_image_final_policy_patch
 
@@ -90,7 +90,9 @@ def test_product_registration_full_flow_reaches_reusable_product_master(tmp_path
         assert registered["facts"]["confirmed"] is True
 
         # Product image path: temporary capture -> cutout -> standard Fit -> final-only asset.
+        # Storage and resolver must share the same isolated root, just like production.
         monkeypatch.setattr(product_image_fact, "media_root", lambda: tmp_path)
+        monkeypatch.setattr(image_studio, "media_root", lambda: tmp_path)
         install_product_image_final_policy_patch()
         monkeypatch.setattr(product_image_fact, "remove_background", _transparent_cutout)
 
