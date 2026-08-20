@@ -56,7 +56,15 @@ def inject_async_restore_ui(html: str) -> str:
         1,
     )
 
+    # Replace the original boot call before adding the restore helpers.  The
+    # previous implementation inserted PATCH_SCRIPT first, so the exact
+    # `init();\n</script>` marker no longer existed and restore never ran.
+    boot_marker = 'init();\n</script>'
+    if boot_marker in html:
+        html = html.replace(boot_marker, 'initWithRegistrationRestore();\n</script>', 1)
+    elif 'initWithRegistrationRestore();' not in html:
+        raise RuntimeError('product registration init marker not found')
+
     if 'function restoreRecentRegistration()' not in html:
         html = html.replace('</script>', PATCH_SCRIPT + '\n</script>', 1)
-    html = html.replace('init();\n</script>', 'initWithRegistrationRestore();\n</script>', 1)
     return html
