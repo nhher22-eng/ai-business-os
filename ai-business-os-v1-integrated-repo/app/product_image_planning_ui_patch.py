@@ -103,7 +103,7 @@ function collectImagePlans(){
 async function getImagePlans(){
   const s=document.getElementById('imagePlanStatus');try{
     if(!productId)throw new Error('먼저 기본 FACT를 저장하세요.');
-    s.textContent='확정 FACT와 이미지 FACT를 참고해 이미지 기획 제안 중...';
+    s.textContent='확정 FACT와 이미지 FACT, 확정 텍스트 정보를 참고해 이미지 기획 제안 중...';
     const data=await api(`/api/v1/product-registration/products/${productId}/image-plan-suggestions?tenant_id=${tenant}`,{method:'POST'});
     renderImagePlans(data);s.innerHTML=`<span class="ok">이미지 기획 제안 완료 · ${data.metadata?.provider||'planner'}</span>`;
   }catch(e){s.textContent=String(e)}
@@ -127,9 +127,11 @@ async function restoreConfirmedImagePlans(){
 
 const _imagePlanApplySuggestions=applySuggestions;
 applySuggestions=async function(){
-  await _imagePlanApplySuggestions();
+  const applied=await _imagePlanApplySuggestions();
+  if(applied===false)return false;
   const card=document.getElementById('imagePlanCard');if(card)card.classList.remove('hidden');
-  const s=document.getElementById('imagePlanStatus');if(s)s.textContent='텍스트 정보가 확정되었습니다. 이제 필요한 이미지 기획을 검토하세요.';
+  const s=document.getElementById('imagePlanStatus');if(s)s.textContent='텍스트 확장정보가 확정되었습니다. 이제 필요한 이미지 기획을 검토하세요.';
+  return true;
 };
 document.getElementById('getImagePlans').onclick=getImagePlans;
 document.getElementById('confirmImagePlans').onclick=confirmImagePlans;
@@ -144,14 +146,12 @@ def inject_product_image_planning_ui(html: str) -> str:
             raise RuntimeError("product registration done card marker not found")
         html = html.replace(marker, IMAGE_PLAN_CARD + "\n" + marker, 1)
 
-    # Registration no longer launches generation directly. Product Image FACT remains the source of truth.
     html = html.replace(
         '<a href="/image-studio" class="secondary" style="padding:11px 16px;border-radius:10px">AI 이미지 생성 열기</a>',
         '',
         1,
     )
 
-    # Completion copy: registration stores source + expanded information; supplemental production happens later.
     html = html.replace(
         '이제 이 상품의 확정 FACT와 이미지를 이미지 생성·상세페이지 생성에서 다시 입력하지 않고 재사용할 수 있습니다.',
         '기본 FACT와 상품 이미지 FACT, 확정된 확장 상품정보가 Product Master에 저장되었습니다. 추가·보완 이미지는 등록 후 별도 이미지 제작에서 만들 수 있습니다.',
