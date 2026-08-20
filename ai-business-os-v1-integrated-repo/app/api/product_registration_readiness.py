@@ -94,7 +94,7 @@ def registration_readiness(
             "상품등록 완료. 기본 Product Master와 확장 상품정보가 확정되었습니다. 실제 이미지 생성은 등록 완료 조건이 아닙니다."
             if registration_flow_complete
             else (
-                "Product Master 핵심 등록은 완료되었습니다. 텍스트 확장정보와 이미지 기획을 확정하면 상품등록 흐름이 완료됩니다."
+                "Product Master 핵심 등록 완료. 텍스트 확장정보와 이미지 기획을 확정하면 상품등록 흐름이 완료됩니다."
                 if core_ready
                 else "필수 FACT와 상품 이미지 FACT를 모두 확정해야 Product Master 핵심 등록이 완료됩니다."
             )
