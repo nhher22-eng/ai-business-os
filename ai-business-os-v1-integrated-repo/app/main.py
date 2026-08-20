@@ -17,6 +17,7 @@ from app.api.product_registration import router as product_registration_router
 from app.api.product_registration_recent import router as product_registration_recent_router
 from app.api.product_registration_assets import router as product_registration_assets_router
 from app.api.product_registration_readiness import router as product_registration_readiness_router
+from app.api.product_image_planning import router as product_image_planning_router
 from app.api.product_image_fact_async import router as product_image_fact_async_router
 from app.api.product_image_facts import router as product_image_facts_router
 from app.api.product_overview import router as product_overview_router
@@ -41,6 +42,7 @@ from app.product_management_ui_patch import inject_product_management_mode
 from app.product_operations_ui_patch import inject_product_operations_ui
 from app.product_image_fact_ui_patch import inject_product_image_fact_ui
 from app.product_registration_async_restore_ui_patch import inject_async_restore_ui
+from app.product_image_planning_ui_patch import inject_product_image_planning_ui
 from app.product_registration_readiness_ui_patch import inject_product_registration_readiness_ui
 from app.services.fact_grounded_copy_patch import install_fact_grounded_copy_patch
 from app.services.product_master_integration_patch import install_product_master_integration_patch
@@ -70,6 +72,7 @@ product_registration_ui.HTML = inject_product_management_mode(product_registrati
 product_registration_ui.HTML = inject_product_operations_ui(product_registration_ui.HTML)
 product_registration_ui.HTML = inject_product_image_fact_ui(product_registration_ui.HTML)
 product_registration_ui.HTML = inject_async_restore_ui(product_registration_ui.HTML)
+product_registration_ui.HTML = inject_product_image_planning_ui(product_registration_ui.HTML)
 product_registration_ui.HTML = inject_product_registration_readiness_ui(product_registration_ui.HTML)
 
 app = FastAPI(
@@ -85,6 +88,7 @@ app.include_router(product_registration_router)
 app.include_router(product_registration_recent_router)
 app.include_router(product_registration_assets_router)
 app.include_router(product_registration_readiness_router)
+app.include_router(product_image_planning_router)
 app.include_router(product_image_fact_async_router)
 app.include_router(product_image_facts_router)
 app.include_router(product_overview_router)
