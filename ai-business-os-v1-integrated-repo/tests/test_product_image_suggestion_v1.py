@@ -19,8 +19,10 @@ def test_image_suggestion_plan_uses_safe_hard_lock_ready_roles():
     )
 
     assert [row["image_type"] for row in plan] == ["HERO", "LIFESTYLE", "EXPLANATION"]
-    assert all(row["usage_context"] == "SMARTSTORE" for row in plan)
-    assert all("기준 이미지" in row["request_text"] for row in plan)
+    assert plan[0]["usage_context"] == "SMARTSTORE"
+    assert plan[1]["usage_context"] == "DETAIL_PAGE"
+    assert plan[2]["usage_context"] == "DETAIL_PAGE"
+    assert all("기준사진" in row["request_text"] for row in plan)
     assert "베란다 화분 관리" in plan[1]["request_text"]
 
 
