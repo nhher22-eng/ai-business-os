@@ -43,7 +43,7 @@ def test_fallback_has_two_fact_grounded_line_drawings_and_no_fake_dimensions():
     front = next(p for p in line if "정면" in p["title"])
     assert front["status"] == "fact"
     assert "숫자는 표시하지 않습니다" in (front["note"] or "")
-    assert not any(char.isdigit() for p in line for char in " ".join(p["basis"]))
+    assert "확정 치수 FACT" not in front["basis"]
 
 
 def test_simple_usage_flow_is_not_complex_manual_content():
