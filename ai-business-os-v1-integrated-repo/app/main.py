@@ -14,7 +14,9 @@ from app.api.detail_page_autogen import router as detail_page_autogen_router
 from app.api.detail_page_content_basis import router as detail_page_content_basis_router
 from app.api.canva_controlled_export import router as canva_controlled_export_router
 from app.api.product_registration import router as product_registration_router
+from app.api.product_registration_recent import router as product_registration_recent_router
 from app.api.product_registration_assets import router as product_registration_assets_router
+from app.api.product_image_fact_async import router as product_image_fact_async_router
 from app.api.product_image_facts import router as product_image_facts_router
 from app.api.product_overview import router as product_overview_router
 from app.api.product_operations import router as product_operations_router
@@ -36,6 +38,7 @@ from app.product_content_basis_ui_patch import inject_product_content_basis_edit
 from app.product_management_ui_patch import inject_product_management_mode
 from app.product_operations_ui_patch import inject_product_operations_ui
 from app.product_image_fact_ui_patch import inject_product_image_fact_ui
+from app.product_registration_async_restore_ui_patch import inject_async_restore_ui
 from app.services.fact_grounded_copy_patch import install_fact_grounded_copy_patch
 from app.services.product_master_integration_patch import install_product_master_integration_patch
 from app.services.product_registration_safety_patch import install_product_registration_safety_patch
@@ -58,6 +61,7 @@ product_registration_ui.HTML = inject_product_content_basis_editor(product_regis
 product_registration_ui.HTML = inject_product_management_mode(product_registration_ui.HTML)
 product_registration_ui.HTML = inject_product_operations_ui(product_registration_ui.HTML)
 product_registration_ui.HTML = inject_product_image_fact_ui(product_registration_ui.HTML)
+product_registration_ui.HTML = inject_async_restore_ui(product_registration_ui.HTML)
 
 app = FastAPI(
     title=settings.app_name,
@@ -69,7 +73,9 @@ app.include_router(operations_router)
 app.include_router(dashboard_ui_router)
 app.include_router(business_router)
 app.include_router(product_registration_router)
+app.include_router(product_registration_recent_router)
 app.include_router(product_registration_assets_router)
+app.include_router(product_image_fact_async_router)
 app.include_router(product_image_facts_router)
 app.include_router(product_overview_router)
 app.include_router(product_operations_router)
