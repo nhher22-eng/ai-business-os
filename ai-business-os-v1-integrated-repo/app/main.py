@@ -26,6 +26,7 @@ from app.operations_ui import router as operations_ui_router
 from app.image_studio_ui import router as image_studio_ui_router
 from app.product_overview_ui import router as product_overview_ui_router, inject_product_overview_link
 from app import dashboard_ui, detail_page_ui, product_registration_ui
+from app.dashboard_product_work_ui_patch import inject_dashboard_product_work
 from app.detail_page_autogen_ui_patch import inject_autogen_ui
 from app.detail_page_content_basis_ui_patch import inject_detail_page_content_basis_editor
 from app.detail_page_product_selection_ui_patch import inject_detail_page_product_selection
@@ -59,6 +60,7 @@ detail_page_ui.HTML = inject_detail_page_content_basis_editor(detail_page_ui.HTM
 detail_page_ui.HTML = inject_detail_page_product_selection(detail_page_ui.HTML)
 dashboard_ui.HTML = inject_product_registration_link(dashboard_ui.HTML)
 dashboard_ui.HTML = inject_product_overview_link(dashboard_ui.HTML)
+dashboard_ui.HTML = inject_dashboard_product_work(dashboard_ui.HTML)
 product_registration_ui.HTML = inject_product_registration_resume(product_registration_ui.HTML)
 product_registration_ui.HTML = inject_product_image_restore(product_registration_ui.HTML)
 product_registration_ui.HTML = inject_product_content_basis_editor(product_registration_ui.HTML)
