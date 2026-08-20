@@ -44,6 +44,10 @@ const _readinessLoadImageFacts=loadImageFacts;
 loadImageFacts=async function(){const result=await _readinessLoadImageFacts();await checkRegistrationReadiness();return result};
 const _readinessConfirmImagePlans=confirmImagePlans;
 confirmImagePlans=async function(){await _readinessConfirmImagePlans();await checkRegistrationReadiness()};
+const _finalApplySuggestionsButton=document.getElementById('applySuggestions');
+if(_finalApplySuggestionsButton)_finalApplySuggestionsButton.onclick=applySuggestions;
+const _finalConfirmImagePlansButton=document.getElementById('confirmImagePlans');
+if(_finalConfirmImagePlansButton)_finalConfirmImagePlansButton.onclick=confirmImagePlans;
 '''
 
 
