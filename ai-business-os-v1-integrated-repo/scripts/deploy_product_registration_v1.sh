@@ -11,7 +11,7 @@ fi
 
 BACKUP_DIR="$ROOT/backups"
 STAMP="$(date -u +%Y%m%d-%H%M%S)"
-BACKUP="$BACKUP_DIR/pre-product-dashboard-final-$STAMP.dump"
+BACKUP="$BACKUP_DIR/pre-product-registration-expanded-$STAMP.dump"
 mkdir -p "$BACKUP_DIR"
 
 echo "[1/10] Starting database services"
@@ -62,13 +62,17 @@ printf 'product-registration HTTP ' && curl -fsS -o /dev/null -w '%{http_code}\n
 printf 'image-studio HTTP ' && curl -fsS -o /dev/null -w '%{http_code}\n' http://localhost:8000/image-studio
 printf 'detail-pages HTTP ' && curl -fsS -o /dev/null -w '%{http_code}\n' http://localhost:8000/detail-pages
 
-echo "[9/10] Verifying registered API contracts inside API container"
+echo "[9/10] Verifying registered API and UI contracts inside API container"
 docker compose exec -T api python - <<'PY'
 from app.main import app
+from app import product_registration_ui
 
 paths = {route.path for route in app.routes}
 required = {
     "/api/v1/product-registration/products/{product_id}/readiness",
+    "/api/v1/product-registration/products/{product_id}/image-plan-suggestions",
+    "/api/v1/product-registration/products/{product_id}/image-plans/confirm",
+    "/api/v1/product-registration/products/{product_id}/image-plans",
     "/api/v1/product-overview/products",
     "/api/v1/product-image-facts/products/{product_id}",
     "/api/v1/product-image-facts/products/{product_id}/batch-async",
@@ -76,7 +80,23 @@ required = {
 missing = sorted(required - paths)
 if missing:
     raise SystemExit(f"missing routes: {missing}")
-print("product dashboard API contracts: PASS")
+
+html = product_registration_ui.HTML
+required_copy = (
+    "① 메인 / 히어로",
+    "⑤ 간단 사용 / 활용 순서",
+    "⑥ 라인드로잉 기본 2종",
+    "⑧ 추가 이미지 아이디어",
+    "선택한 이미지 기획 확정",
+    "실제 이미지 생성은 등록 완료 조건이 아닙니다",
+)
+missing_copy = [text for text in required_copy if text not in html]
+if missing_copy:
+    raise SystemExit(f"missing registration UI contract: {missing_copy}")
+if "AI 이미지 생성 열기" in html or "nextImageStudio" in html:
+    raise SystemExit("direct Image Studio generation link must not exist in registration flow")
+
+print("expanded product registration deployment contract: PASS")
 PY
 
 echo "[10/10] Migration and service status"
@@ -84,6 +104,6 @@ docker compose run --rm migrate alembic current || true
 docker compose ps
 
 echo
-echo "Product Registration + Product Master + Dashboard deployment completed."
+echo "Expanded Product Registration + Product Master deployment completed."
 echo "Database backup: $BACKUP"
-echo "Open /dashboard -> 상품 업무, /products, and /product-registration for final browser smoke test."
+echo "Open /product-registration for the final browser smoke test: FACT -> Image FACT -> text confirmation -> image planning -> registration complete."
