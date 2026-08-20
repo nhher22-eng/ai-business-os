@@ -11,3 +11,5 @@ def test_product_image_fact_deploy_script_has_safety_contract():
     assert "/api/v1/product-image-facts/products/{product_id}/batch-upload" in text
     assert "health/live" in text
     assert "health/ready" in text
+    assert "docker compose exec -T api python" in text
+    assert "\npython - <<'PY'" not in text
