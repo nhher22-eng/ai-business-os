@@ -66,10 +66,10 @@ docker compose exec -T api python - <<'PY'
 import urllib.request
 spec = urllib.request.urlopen('http://localhost:8000/openapi.json', timeout=10).read().decode('utf-8')
 required = [
-    '/api/v1/product-image-facts/products/{product_id}/batch-upload',
+    '/api/v1/product-image-facts/products/{product_id}/batch',
     '/api/v1/product-image-facts/products/{product_id}',
-    '/api/v1/product-image-facts/items/{item_id}',
-    '/api/v1/product-image-facts/products/{product_id}/confirm',
+    '/api/v1/product-image-facts/images/{image_fact_id}',
+    '/api/v1/product-image-facts/images/{image_fact_id}/confirm',
 ]
 missing = [path for path in required if path not in spec]
 if missing:
