@@ -67,6 +67,9 @@ class ImageRoleBody(BaseModel):
     asset_id: str
 
 
+_RESERVED_MARKETING_KEYS = {"confirmed_image_plans", "image_plan_policy"}
+
+
 def _profile_payload(row: ProductRegistrationProfile, product: Product) -> dict:
     return {
         "product": {
@@ -120,9 +123,6 @@ def _get_profile(db: Session, *, tenant_id: str, product_id: str) -> ProductRegi
         )
     )
     if row is None:
-        # Legacy products created before Product Registration may not have a
-        # profile yet. Create an empty compatibility profile on first access.
-        # No FACT values are invented or confirmed here.
         row = ProductRegistrationProfile(
             tenant_id=tenant_id,
             product_id=product_id,
@@ -272,7 +272,14 @@ def apply_suggestions(
     if body.operating_info is not None:
         row.operating_info = body.operating_info
     if body.marketing_info is not None:
-        row.marketing_info = body.marketing_info
+        # Text confirmation may happen again after image planning. Preserve the
+        # reserved image-plan state so re-editing text never silently deletes it.
+        existing_marketing = dict(row.marketing_info or {})
+        merged_marketing = dict(body.marketing_info)
+        for key in _RESERVED_MARKETING_KEYS:
+            if key in existing_marketing:
+                merged_marketing[key] = existing_marketing[key]
+        row.marketing_info = merged_marketing
     db.commit()
     db.refresh(row)
     return _profile_payload(row, product)
