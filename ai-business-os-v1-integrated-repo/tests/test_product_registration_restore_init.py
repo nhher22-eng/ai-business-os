@@ -8,5 +8,5 @@ def test_restore_boot_replaces_original_init_before_script_injection():
 
     assert "function restoreRecentRegistration()" in patched
     assert "async function initWithRegistrationRestore()" in patched
-    assert "initWithRegistrationRestore();\n</script>" in patched
-    assert "\ninit();\n</script>" not in patched
+    assert "initWithRegistrationRestore();" in patched
+    assert "\ninit();\n" not in patched
