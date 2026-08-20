@@ -38,16 +38,17 @@ def test_ai_suggestions_are_blocked_until_facts_are_confirmed():
     assert result["operating"]["category"] is None
 
 
-def test_uncertain_ai_ideas_remain_visible_as_review_candidates():
+def test_model_physical_feature_hypotheses_are_not_exposed_as_product_features():
     raw = {
         "category": "방충망",
-        "usage": ["창문 방충", "벌레 차단"],
-        "operating": {"category": "방충망", "usage": ["창문 방충"]},
+        "usage": ["블루베리 보호"],
+        "operating": {"category": "방충망", "usage": ["블루베리 보호"]},
         "marketing": {
-            "features": ["촘촘해서 효과적으로 벌레 차단"],
-            "selling_points": ["쉬운 설치", "별도 조립 불필요"],
-            "target_customer": ["가정용 창문 구매자"],
-            "content_direction": "편리성 강조",
+            "features": ["매우 튼튼한 구조", "친환경 소재"],
+            "selling_points": ["확정된 60메쉬 사양을 중심으로 설명"],
+            "target_customer": ["블루베리 재배자"],
+            "content_direction": "실제 사양과 사용 장면 중심",
+            "product_notes": ["추가 확인 필요: 실외 장기 사용 조건"],
         },
         "warnings": [],
     }
@@ -62,14 +63,14 @@ def test_uncertain_ai_ideas_remain_visible_as_review_candidates():
         facts=facts,
     )
 
-    assert result["category"] == "방충망"
+    assert result["category"] is None
     editor = result["editor"]
-    assert editor["category"]["value"] == "방충망"
-    assert any(row["value"] == "창문 방충" and row["status"] == "review" for row in editor["usage"])
-    assert any(row["value"] == "쉬운 설치" and row["status"] == "review" for row in editor["selling_points"])
-    assert any(row["value"] == "가정용 창문 구매자" and row["status"] == "review" for row in editor["target_customer"])
+    assert editor["category"] is None
+    assert any(row["value"] == "블루베리 보호" and row["status"] == "review" for row in editor["usage"])
     assert any(row["value"] == "60메쉬" and row["source"] == "fact" for row in editor["features"])
-    assert any("확인" in row["reason"] for row in editor["selling_points"])
+    assert all(row["value"] not in {"매우 튼튼한 구조", "친환경 소재"} for row in editor["features"])
+    assert any(row["value"] == "블루베리 재배자" and row["status"] == "review" for row in editor["target_customer"])
+    assert any(row["value"].startswith("추가 확인 필요:") for row in editor["product_notes"])
 
 
 def test_dashboard_link_injection_is_idempotent():
