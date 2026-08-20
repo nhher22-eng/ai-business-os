@@ -103,7 +103,6 @@ def suggest_image_plans(
         raise HTTPException(409, detail="confirmed FACT is required before image planning")
     operating = dict(profile.operating_info or {})
     marketing = dict(profile.marketing_info or {})
-    # Image planning is downstream of the user's text-basis confirmation.
     if not operating and not marketing:
         raise HTTPException(409, detail="confirm text AI suggestions before image planning")
 
@@ -143,6 +142,7 @@ def confirm_image_plans(
     marketing = dict(profile.marketing_info or {})
     marketing["confirmed_image_plans"] = cleaned
     marketing["image_plan_policy"] = {
+        "plans_confirmed": True,
         "product_image_fact_is_canonical": True,
         "image_generation_required_for_registration": False,
         "complex_manual_content_excluded": True,
