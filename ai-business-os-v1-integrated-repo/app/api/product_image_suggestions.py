@@ -329,12 +329,12 @@ def adopt_product_image_suggestion(
             tenant_id=tenant_id,
             product_id=job.product_id,
             job_id=None,
-            asset_role="PRODUCT_REFERENCE",
+            asset_role="INTERNAL_REFERENCE",
             asset_uri=asset.asset_uri,
             original_filename=f"ai-suggestion-{job.image_type.lower()}-v{asset.version_no}.png",
             mime_type="image/png",
-            internal_reference_only=False,
-            lock_level="hard_lock",
+            internal_reference_only=True,
+            lock_level="guided",
             sort_order=0 if (body.role or _role_for_job(job)) == "primary" else 100,
         )
         db.add(reference)
