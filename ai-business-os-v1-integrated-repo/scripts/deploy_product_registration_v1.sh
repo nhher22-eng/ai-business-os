@@ -67,8 +67,6 @@ docker compose exec -T api python - <<'PY'
 from app.main import app
 from app import product_registration_ui
 
-# OpenAPI is the authoritative public API contract. Do not depend on FastAPI's
-# internal route-wrapper object shapes, which can vary by framework version.
 paths = set(app.openapi()["paths"].keys())
 required = {
     "/api/v1/product-registration/products/{product_id}/readiness",
@@ -85,6 +83,18 @@ if missing:
 
 html = product_registration_ui.HTML
 required_copy = (
+    "3 · 텍스트 AI 제안 · 확장 상품정보",
+    "상품을 설명하는 확장정보를 먼저 확정합니다",
+    "텍스트 AI 제안 받기",
+    "용도",
+    "특징",
+    "판매 포인트",
+    "타깃",
+    "콘텐츠 방향",
+    "상품 관련 참고·주의",
+    "AI 제안 편집 안내",
+    "선택한 텍스트 정보 확정",
+    "4 · AI 이미지 제안 · 확장 상품정보",
     "① 메인 / 히어로",
     "⑤ 간단 사용 / 활용 순서",
     "⑥ 라인드로잉 기본 2종",
@@ -95,8 +105,14 @@ required_copy = (
 missing_copy = [text for text in required_copy if text not in html]
 if missing_copy:
     raise SystemExit(f"missing registration UI contract: {missing_copy}")
+if "basisGroup('카테고리','category'" in html:
+    raise SystemExit("legacy category group must not be exposed in final text extension card")
+if html.find('id="aiCard"') > html.find('id="imagePlanCard"'):
+    raise SystemExit("text AI card must appear before image planning card")
 if "AI 이미지 생성 열기" in html or "nextImageStudio" in html:
     raise SystemExit("direct Image Studio generation link must not exist in registration flow")
+if "if(applied===false)return false" not in html:
+    raise SystemExit("image planning must open only after successful text confirmation")
 
 print("expanded product registration deployment contract: PASS")
 PY
