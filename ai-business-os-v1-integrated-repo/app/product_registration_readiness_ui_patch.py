@@ -6,18 +6,20 @@ READINESS_SCRIPT = r'''
 function setRegistrationNextActions(){
   if(!productId)return;
   const detail=document.getElementById('nextDetailPage');
-  const image=document.getElementById('nextImageStudio');
   if(detail)detail.href=`/detail-pages?product_id=${encodeURIComponent(productId)}`;
-  if(image)image.href=`/image-studio?product_id=${encodeURIComponent(productId)}`;
 }
 function renderRegistrationReadiness(r){
   const el=document.getElementById('registrationReadinessStatus');
   const done=document.getElementById('doneCard');
   if(!r){if(el)el.textContent='';if(done)done.classList.add('hidden');return;}
-  if(r.ready){
-    if(el)el.innerHTML='<span class="ok">✓ Product Master 핵심 등록 완료 · FACT + 필수 이미지 확정</span>';
+  if(r.registration_flow_complete){
+    if(el)el.innerHTML='<span class="ok">✓ 상품등록 완료 · 기본 Product Master + 확장 상품정보 확정</span>';
     setRegistrationNextActions();
     if(done)done.classList.remove('hidden');
+  }else if(r.ready){
+    const missing=(r.registration_missing_labels||[]).join(', ')||'확장 상품정보';
+    if(el)el.innerHTML=`<span class="ok">✓ Product Master 핵심 등록 완료</span> · <span class="warn">등록 마무리 전: ${missing}</span>`;
+    if(done)done.classList.add('hidden');
   }else{
     const missing=(r.missing_labels||[]).join(', ')||'필수 등록정보';
     if(el)el.innerHTML=`<span class="warn">Product Master 완료 전 보완: ${missing}</span>`;
@@ -40,6 +42,8 @@ const _readinessApplySuggestions=applySuggestions;
 applySuggestions=async function(){await _readinessApplySuggestions();await checkRegistrationReadiness()};
 const _readinessLoadImageFacts=loadImageFacts;
 loadImageFacts=async function(){const result=await _readinessLoadImageFacts();await checkRegistrationReadiness();return result};
+const _readinessConfirmImagePlans=confirmImagePlans;
+confirmImagePlans=async function(){await _readinessConfirmImagePlans();await checkRegistrationReadiness()};
 '''
 
 
@@ -75,7 +79,7 @@ def inject_product_registration_readiness_ui(html: str) -> str:
         1,
     )
 
-    # The old UI declared completion immediately after AI suggestions. Readiness owns completion now.
+    # Completion belongs to the full registration flow, not the text-suggestion step.
     html = html.replace(
         "document.getElementById('doneCard').classList.remove('hidden');",
         "await checkRegistrationReadiness();",
@@ -85,7 +89,6 @@ def inject_product_registration_readiness_ui(html: str) -> str:
     old_done_actions = '<div class="actions"><a href="/dashboard" class="secondary" style="padding:11px 16px;border-radius:10px">대시보드로 돌아가기</a></div>'
     new_done_actions = '''<div class="actions">
       <a id="nextDetailPage" href="/detail-pages" class="secondary" style="padding:11px 16px;border-radius:10px">상세페이지 만들기</a>
-      <a id="nextImageStudio" href="/image-studio" class="secondary" style="padding:11px 16px;border-radius:10px">AI 이미지 생성</a>
       <a href="/products" class="secondary" style="padding:11px 16px;border-radius:10px">전체 상품</a>
       <a href="/dashboard" class="secondary" style="padding:11px 16px;border-radius:10px">대시보드</a>
     </div>'''
