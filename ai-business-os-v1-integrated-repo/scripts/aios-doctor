@@ -105,7 +105,7 @@ else
   fail "curl 명령을 찾지 못했습니다."
 fi
 
-BACKUP_DIR="${AIOS_BACKUP_DIR:-$GIT_ROOT/backups}"
+BACKUP_DIR="${AIOS_BACKUP_DIR:-$ROOT/backups}"
 LATEST="$(find "$BACKUP_DIR" -maxdepth 1 -type f -name '*.dump' -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2- || true)"
 if [[ -z "$LATEST" ]]; then
   warn "PostgreSQL 백업을 찾지 못했습니다: $BACKUP_DIR"
