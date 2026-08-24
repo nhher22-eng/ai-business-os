@@ -46,7 +46,7 @@ async function restoreRecentRegistration(){
     }
   }catch(e){console.warn('registration restore skipped',e)}
 }
-async function initWithRegistrationRestore(){await init();await restoreRecentRegistration()}
+async function initWithRegistrationRestore(){await init()}
 '''
 
 

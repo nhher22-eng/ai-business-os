@@ -23,6 +23,8 @@ class Settings(BaseSettings):
 
     # M-05 / M-06 content studio
     media_root: str = "/app/data"
+    asset_storage_provider: str = "local"
+    asset_storage_root: str = "/app/data/asset-workflows"
     openai_api_key: str = ""
     openai_api_base: str = "https://api.openai.com/v1"
     openai_image_model: str = "gpt-image-2"

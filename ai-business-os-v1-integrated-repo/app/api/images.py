@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.services.image_studio import ensure_product_image_fact_references
+
 from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
@@ -161,6 +163,12 @@ def _job_payload(db: Session, job: ImageGenerationJob) -> dict:
                 "stage": a.asset_stage,
                 "version_no": a.version_no,
                 "status": a.status,
+                "asset_name": a.asset_name,
+                "filename": a.filename,
+                "role_code": a.role_code,
+                "usage_code": a.usage_code,
+                "content_hash": a.content_hash,
+                "metadata": a.asset_metadata or {},
                 "width": a.width,
                 "height": a.height,
                 "qa_status": a.qa_status,
@@ -217,6 +225,28 @@ def create_job(
         if sku is None:
             raise HTTPException(404, detail="sku not found")
 
+    existing_draft = db.scalar(
+        select(ImageGenerationJob)
+        .where(
+            ImageGenerationJob.tenant_id == tenant_id,
+            ImageGenerationJob.product_id == body.product_id,
+            ImageGenerationJob.sku_id == body.sku_id,
+            ImageGenerationJob.image_type == body.image_type,
+            ImageGenerationJob.style_preset == body.style_preset,
+            ImageGenerationJob.usage_context == body.usage_context,
+            ImageGenerationJob.aspect_ratio == body.aspect_ratio,
+            ImageGenerationJob.protection_mode == body.protection_mode,
+            ImageGenerationJob.request_text == body.request_text,
+            ImageGenerationJob.status == "draft",
+        )
+        .order_by(ImageGenerationJob.created_at.desc())
+    )
+    if existing_draft is not None:
+        ensure_product_image_fact_references(db, existing_draft)
+        db.commit()
+        db.refresh(existing_draft)
+        return _job_payload(db, existing_draft)
+
     row = ImageGenerationJob(
         tenant_id=tenant_id,
         workspace_id=body.workspace_id,
@@ -233,6 +263,8 @@ def create_job(
         created_by=body.created_by,
     )
     db.add(row)
+    db.flush()
+    ensure_product_image_fact_references(db, row)
     db.commit()
     db.refresh(row)
     return _job_payload(db, row)
@@ -635,4 +667,4 @@ def image_asset_content(
         path = resolve_media_uri(asset.asset_uri)
     except ImageStudioError as exc:
         raise HTTPException(404, detail=str(exc)) from exc
-    return FileResponse(path, media_type="image/png", filename=path.name)
+    return FileResponse(path, media_type="image/png", filename=asset.filename or path.name)

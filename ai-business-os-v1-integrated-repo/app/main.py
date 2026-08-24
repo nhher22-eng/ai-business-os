@@ -10,6 +10,7 @@ from app.api.business import router as business_router
 from app.api.dashboard_session import router as dashboard_session_router
 from app.api.images import router as images_router
 from app.api.detail_pages import router as detail_pages_router
+from app.api.detail_page_templates import router as detail_page_templates_router
 from app.api.detail_page_autogen import router as detail_page_autogen_router
 from app.api.detail_page_content_basis import router as detail_page_content_basis_router
 from app.api.canva_controlled_export import router as canva_controlled_export_router
@@ -22,11 +23,16 @@ from app.api.product_image_fact_async import router as product_image_fact_async_
 from app.api.product_image_facts import router as product_image_facts_router
 from app.api.product_overview import router as product_overview_router
 from app.api.product_operations import router as product_operations_router
+from app.api.content_copy import router as content_copy_router
+from app.api.image_asset_workflows import router as image_asset_workflows_router
 from app.dashboard_ui import router as dashboard_ui_router
 from app.operations_ui import router as operations_ui_router
 from app.image_studio_ui import router as image_studio_ui_router
 from app.product_overview_ui import router as product_overview_ui_router, inject_product_overview_link
+from app.detail_page_template_ui import router as detail_page_template_ui_router
 from app import dashboard_ui, detail_page_ui, product_registration_ui
+from app.workflow_ui import router as workflow_ui_router
+from app.unified_tool_ui import router as unified_tool_ui_router
 from app.dashboard_product_work_ui_patch import inject_dashboard_product_work
 from app.detail_page_autogen_ui_patch import inject_autogen_ui
 from app.detail_page_content_basis_ui_patch import inject_detail_page_content_basis_editor
@@ -44,6 +50,7 @@ from app.product_image_fact_ui_patch import inject_product_image_fact_ui
 from app.product_registration_async_restore_ui_patch import inject_async_restore_ui
 from app.product_image_planning_ui_patch import inject_product_image_planning_ui
 from app.product_registration_readiness_ui_patch import inject_product_registration_readiness_ui
+from app.product_registration_v2_ui_patch import inject_product_registration_v2
 from app.services.fact_grounded_copy_patch import install_fact_grounded_copy_patch
 from app.services.product_master_integration_patch import install_product_master_integration_patch
 from app.services.product_master_release_gate_patch import install_product_master_release_gate
@@ -74,6 +81,7 @@ product_registration_ui.HTML = inject_product_image_fact_ui(product_registration
 product_registration_ui.HTML = inject_async_restore_ui(product_registration_ui.HTML)
 product_registration_ui.HTML = inject_product_image_planning_ui(product_registration_ui.HTML)
 product_registration_ui.HTML = inject_product_registration_readiness_ui(product_registration_ui.HTML)
+product_registration_ui.HTML = inject_product_registration_v2(product_registration_ui.HTML)
 
 app = FastAPI(
     title=settings.app_name,
@@ -93,10 +101,13 @@ app.include_router(product_image_fact_async_router)
 app.include_router(product_image_facts_router)
 app.include_router(product_overview_router)
 app.include_router(product_operations_router)
+app.include_router(content_copy_router)
+app.include_router(image_asset_workflows_router)
 app.include_router(dashboard_session_router)
 app.include_router(operations_ui_router)
 app.include_router(images_router)
 app.include_router(detail_pages_router)
+app.include_router(detail_page_templates_router)
 app.include_router(detail_page_autogen_router)
 app.include_router(detail_page_content_basis_router)
 app.include_router(canva_controlled_export_router)
@@ -104,6 +115,9 @@ app.include_router(image_studio_ui_router)
 app.include_router(product_overview_ui_router)
 app.include_router(product_registration_ui_router)
 app.include_router(detail_page_ui.router)
+app.include_router(detail_page_template_ui_router)
+app.include_router(workflow_ui_router)
+app.include_router(unified_tool_ui_router)
 
 
 @app.get("/")
@@ -114,6 +128,7 @@ def root():
         "status": "running",
         "docs": "/docs",
         "operations": "/operations",
+        "business_home": "/business-home",
     }
 
 

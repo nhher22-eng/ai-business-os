@@ -72,8 +72,8 @@ def test_detail_sections_keep_reviews_and_conditionally_add_relations():
     db = make_db(); ws, product = seed(db)
     rows = build_sections(db, tenant_id="t", product_id=product.id, strategy="review_first")
     by_type = {r["section_type"]: r for r in rows}
-    assert by_type["REVIEW_SUMMARY"]["is_required"] is True
-    assert by_type["REVIEW_DETAIL"]["is_required"] is True
+    assert by_type["REVIEW_SUMMARY"]["is_required"] is False
+    assert by_type["REVIEW_DETAIL"]["is_required"] is False
     assert by_type["REVIEW_SUMMARY"]["content_json"]["data_status"] == "ready"
     assert by_type["ADD_ON"]["is_enabled"] is True
     assert by_type["ADD_ON"]["content_json"]["items"][0]["name"] == "워터타이머"

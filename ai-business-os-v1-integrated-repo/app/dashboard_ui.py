@@ -130,6 +130,7 @@ HTML += r"""
     <div class="brand">AI Business OS</div>
 
     <div class="nav">
+      <a href="/business-home">새 업무 홈</a>
       <button class="active" data-panel="home">홈</button>
       <button data-panel="products">상품 업무</button>
       <button data-panel="approvals">승인함</button>

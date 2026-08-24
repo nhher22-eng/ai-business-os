@@ -9,6 +9,7 @@ from typing import Iterable
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from app.db.product_image_fact import ProductImageFact
 from app.db.models import (
     BrandStyleSheet,
     BusinessWorkspace,
@@ -77,6 +78,7 @@ BASE_SECTION_ORDER = [
     "SPEC",
     "REVIEW_DETAIL",
     "RELATED_PRODUCTS",
+    "CAUTION",
     "FAQ",
 ]
 
@@ -100,9 +102,14 @@ STRATEGY_ORDERS = {
     ],
 }
 
+# 데이터 존재 여부와 관계없이 반드시 생성 가능한 핵심 섹션만 필수로 둡니다.
+# 리뷰·사용장면·옵션·구성품·설치·FAQ는 실제 근거 데이터가 있을 때만 활성화합니다.
+# Legacy fallback only. A configured template determines its own required sections.
+# Reviews are never mandatory unless a published template explicitly requires them.
 REQUIRED_SECTIONS = {
-    "HERO", "REVIEW_SUMMARY", "PROBLEM", "LIFESTYLE", "FEATURE", "OPTION_COMPARE",
-    "COMPONENTS", "INSTALLATION", "SPEC", "REVIEW_DETAIL", "FAQ",
+    "HERO",
+    "FEATURE",
+    "SPEC",
 }
 
 RELATION_TYPES = {"ADD_ON", "RELATED_PRODUCT", "ACCESSORY", "REPLACEMENT"}
@@ -300,6 +307,64 @@ def _verified_reviews(db: Session, tenant_id: str, product_id: str) -> list[dict
     ]
 
 
+def _confirmed_product_image_fact(
+    db: Session,
+    tenant_id: str,
+    product_id: str,
+    slot_types: Iterable[str],
+) -> str | None:
+    row = db.scalar(
+        select(ProductImageFact)
+        .where(
+            ProductImageFact.tenant_id == tenant_id,
+            ProductImageFact.product_id == product_id,
+            ProductImageFact.status == "confirmed",
+            ProductImageFact.slot_type.in_(list(slot_types)),
+        )
+        .order_by(ProductImageFact.slot_index, ProductImageFact.created_at)
+    )
+    return row.id if row else None
+
+
+def _clean_detail_specification(value: str | None) -> str:
+    """Product Master의 사양 문자열을 고객이 읽을 수 있는 표시 형식으로 정리합니다."""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+
+    dimension_pattern = re.compile(
+        r"""\{\s*["']length["']\s*:\s*["'](?P<length>[^"']+)["']\s*,
+        \s*["']width["']\s*:\s*["'](?P<width>[^"']+)["']\s*,
+        \s*["']height["']\s*:\s*["'](?P<height>[^"']+)["']\s*\}""",
+        flags=re.IGNORECASE | re.VERBOSE,
+    )
+
+    def format_dimensions(match: re.Match) -> str:
+        return (
+            f"크기: 길이 {match.group('length')} · "
+            f"폭 {match.group('width')} · "
+            f"높이 {match.group('height')}"
+        )
+
+    text = dimension_pattern.sub(format_dimensions, text)
+    text = re.sub(r"\s+\|\s+", "\n", text)
+
+    lines: list[str] = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if line and line not in lines:
+            lines.append(line)
+
+    return "\n".join(lines)
+
+
+def _feature_specification(value: str) -> str:
+    """전체 사양에서 고객이 먼저 확인할 핵심 재질·기능 정보만 추립니다."""
+    lines = [line.strip() for line in value.splitlines() if line.strip()]
+    keywords = ("주재질", "보조재질", "원목", "바퀴", "드레인", "출수구", "재질")
+    selected = [line for line in lines if any(keyword in line for keyword in keywords)]
+    return "\n".join(selected[:5])
+
 def _approved_image(db: Session, tenant_id: str, product_id: str, image_types: Iterable[str]) -> str | None:
     job_ids = db.scalars(
         select(ImageGenerationJob.id).where(
@@ -329,6 +394,7 @@ def build_sections(
     tenant_id: str,
     product_id: str,
     strategy: str,
+    template: DetailPageTemplate | None = None,
 ) -> list[dict]:
     facts = product_snapshot(db, tenant_id=tenant_id, product_id=product_id)
     product = facts["product"]
@@ -338,8 +404,14 @@ def build_sections(
     add_ons = _active_relations(db, tenant_id, product_id, "ADD_ON")
     related = _active_relations(db, tenant_id, product_id, "RELATED_PRODUCT")
 
-    lifestyle_asset_id = _approved_image(db, tenant_id, product_id, ["LIFESTYLE", "HERO"])
+    # 사용 장면에는 승인된 LIFESTYLE 이미지만 사용합니다.
+    # HERO 이미지를 대신 사용하면 같은 상품 사진이 반복되고 실제 사용 장면으로 오인될 수 있습니다.
+    lifestyle_asset_id = _approved_image(db, tenant_id, product_id, ["LIFESTYLE"])
     spec_asset_id = _approved_image(db, tenant_id, product_id, ["SPEC_SIZE", "EXPLANATION"])
+    hero_fact_id = _confirmed_product_image_fact(db, tenant_id, product_id, ["RIGHT_45", "FRONT"])
+    front_fact_id = _confirmed_product_image_fact(db, tenant_id, product_id, ["FRONT"])
+    specification = _clean_detail_specification(detail["specification"])
+    feature_specification = _feature_specification(specification)
 
     options = [
         {
@@ -381,31 +453,29 @@ def build_sections(
     sections = {
         "HERO": {
             "title": product["name"],
-            "headline": "여러 화분의 물주기, 하나의 관수라인으로",
-            "subheadline": product["description"] or "상품 정보에 기반해 핵심 용도를 명확하게 보여줍니다.",
+            "headline": detail["usage"] or product["description"] or product["name"],
+            "subheadline": product["description"] or "확정된 상품정보를 기준으로 소개합니다.",
             "option_labels": [o["option_value"] or o["name"] for o in options],
-            "fact_sources": ["Product", "ProductSKU"],
+            "product_image_fact_id": hero_fact_id,
+            "fact_sources": ["Product", "ProductDetail", "ProductImageFact"],
         },
         "REVIEW_SUMMARY": review_summary,
         "PROBLEM": {
-            "title": "이런 경우에",
-            "items": [
-                "여러 화분을 한 번에 관리하고 싶은 경우",
-                "베란다·텃밭·플랜터에 관수라인이 필요한 경우",
-                "설치 규모에 맞는 길이 옵션을 선택하고 싶은 경우",
-            ],
-            "copy_status": "draft_copy",
+            "title": "주요 사용 용도",
+            "items": [detail["usage"]] if detail["usage"] else [],
+            "copy_status": "fact_based",
         },
         "LIFESTYLE": {
             "title": "실제 사용 모습",
             "body": detail["usage"] or "승인된 사용장면 이미지와 확정된 사용정보를 연결합니다.",
             "fact_sources": ["ProductDetail.usage"],
             "image_asset_id": lifestyle_asset_id,
+            "product_image_fact_id": None,
             "asset_status": "ready" if lifestyle_asset_id else "image_required",
         },
         "FEATURE": {
             "title": "제품 핵심 특징",
-            "product_specification": detail["specification"],
+            "product_specification": feature_specification,
             "usage": detail["usage"],
             "fact_sources": ["ProductDetail"],
         },
@@ -433,10 +503,11 @@ def build_sections(
         },
         "SPEC": {
             "title": "제품 상세정보",
-            "specification": detail["specification"],
+            "specification": specification,
             "usage_conditions": detail["usage_conditions"],
             "options": options,
             "image_asset_id": spec_asset_id,
+            "product_image_fact_id": front_fact_id if not spec_asset_id else None,
             "fact_sources": ["ProductDetail", "ProductSKU", "ProductComponent"],
         },
         "REVIEW_DETAIL": {
@@ -451,31 +522,143 @@ def build_sections(
             "items": related,
             "fact_sources": ["ProductRelation.RELATED_PRODUCT"],
         },
-        "FAQ": {
-            "title": "구매 전 확인",
-            "cautions": detail["cautions"],
+        "CAUTION": {
+            "title": "사용 전 주의사항",
+            "body": detail["cautions"],
             "usage_conditions": detail["usage_conditions"],
-            "items": [],
-            "fact_sources": ["ProductDetail.cautions", "ProductDetail.usage_conditions"],
+            "fact_sources": [
+                "ProductDetail.cautions",
+                "ProductDetail.usage_conditions",
+            ],
+        },
+        "FAQ": {
+            "title": "구매 전 자주 확인하는 내용",
+            "items": [
+                {
+                    "question": "어떤 환경에서 사용할 수 있나요?",
+                    "answer": detail["usage_conditions"],
+                    "source": "ProductDetail.usage_conditions",
+                }
+                for _ in [0]
+                if detail["usage_conditions"]
+            ] + [
+                {
+                    "question": "사용 전에 확인할 주의사항이 있나요?",
+                    "answer": detail["cautions"],
+                    "source": "ProductDetail.cautions",
+                }
+                for _ in [0]
+                if detail["cautions"]
+            ] + [
+                {
+                    "question": "설치는 어떻게 하나요?",
+                    "answer": detail["installation_method"],
+                    "source": "ProductDetail.installation_method",
+                }
+                for _ in [0]
+                if detail["installation_method"]
+            ],
+            "fact_sources": [
+                "ProductDetail.cautions",
+                "ProductDetail.usage_conditions",
+                "ProductDetail.installation_method",
+            ],
+            "disclosure": "확정된 상품정보를 바탕으로 작성한 구매 전 안내입니다.",
         },
     }
 
-    order = STRATEGY_ORDERS.get(strategy, STRATEGY_ORDERS["review_first"])
+    configured_sections = []
+    rules = template.content_rules if template and isinstance(template.content_rules, dict) else {}
+    raw_sections = rules.get("sections") if isinstance(rules, dict) else None
+    if isinstance(raw_sections, list):
+        for position, item in enumerate(raw_sections):
+            if isinstance(item, str):
+                section_type = item
+                item = {"section_type": section_type}
+            elif isinstance(item, dict):
+                section_type = (
+                    item.get("section_type")
+                    or item.get("type")
+                    or item.get("code")
+                )
+            else:
+                continue
+            if section_type in sections:
+                configured_sections.append((position, section_type, item))
+
+    if configured_sections:
+        configured_sections.sort(
+            key=lambda row: (
+                int(row[2].get("sort_order", row[2].get("order", row[0] + 1))),
+                row[0],
+            )
+        )
+        order = []
+        section_config = {}
+        for _, section_type, item in configured_sections:
+            if section_type not in order:
+                order.append(section_type)
+                section_config[section_type] = item
+    else:
+        order = STRATEGY_ORDERS.get(strategy, STRATEGY_ORDERS["review_first"])
+        section_config = {}
+
     result = []
     for section_type in order:
         content = deepcopy(sections[section_type])
-        enabled = True
+        config = section_config.get(section_type, {})
+        enabled = bool(config.get("enabled", config.get("is_enabled", True)))
+
+        if section_type in {"REVIEW_SUMMARY", "REVIEW_DETAIL"} and not reviews:
+            enabled = False
+        if section_type == "PROBLEM" and not detail["usage"]:
+            enabled = False
+        if section_type == "OPTION_COMPARE" and not options:
+            enabled = False
         if section_type == "ADD_ON" and not add_ons:
+            enabled = False
+        if section_type == "COMPONENTS" and not component_map:
+            enabled = False
+        if section_type == "INSTALLATION" and not detail["installation_method"]:
             enabled = False
         if section_type == "RELATED_PRODUCTS" and not related:
             enabled = False
+        if section_type == "CAUTION" and not (
+            detail["cautions"] or detail["usage_conditions"]
+        ):
+            enabled = False
+        if section_type == "FAQ" and not (
+            detail["cautions"]
+            or detail["usage_conditions"]
+            or detail["installation_method"]
+        ):
+            enabled = False
+
+        required = bool(
+            config.get(
+                "required",
+                config.get("is_required", section_type in REQUIRED_SECTIONS),
+            )
+        )
+        if not enabled and section_type in {
+            "REVIEW_SUMMARY",
+            "REVIEW_DETAIL",
+            "FAQ",
+            "CAUTION",
+        }:
+            required = False
+
         image_asset_id = content.pop("image_asset_id", None)
         result.append(
             {
                 "section_type": section_type,
-                "is_required": section_type in REQUIRED_SECTIONS,
+                "is_required": required,
                 "is_enabled": enabled,
-                "layout_variant": _default_layout(section_type),
+                "layout_variant": (
+                    config.get("layout_variant")
+                    or config.get("layout")
+                    or _default_layout(section_type)
+                ),
                 "source_type": _source_type(section_type),
                 "content_json": content,
                 "image_asset_id": image_asset_id,
@@ -532,6 +715,17 @@ def create_prepared_version(
         status="p0_review",
         change_summary=change_summary,
         fact_snapshot_hash=snapshot_hash(facts),
+        template_snapshot_json={
+            "template_id": template.id,
+            "code": template.code,
+            "name": template.name,
+            "version_no": getattr(template, "version_no", 1),
+            "status": template.status,
+            "layout_rules": deepcopy(template.layout_rules),
+            "content_rules": deepcopy(getattr(template, "content_rules", None)),
+            "field_bindings": deepcopy(getattr(template, "field_bindings", None)),
+            "canva_design_id": getattr(template, "canva_design_id", None),
+        },
     )
     db.add(version)
     db.flush()
@@ -540,6 +734,7 @@ def create_prepared_version(
         tenant_id=job.tenant_id,
         product_id=job.product_id,
         strategy=page_strategy,
+        template=template,
     )
     for idx, spec in enumerate(sections, start=1):
         row = DetailPageSection(
@@ -579,6 +774,9 @@ def clone_version(
         status="p1_review",
         change_summary=change_summary,
         fact_snapshot_hash=source.fact_snapshot_hash,
+        template_snapshot_json=deepcopy(source.template_snapshot_json),
+        external_design_id=source.external_design_id,
+        external_design_url=source.external_design_url,
     )
     db.add(version)
     db.flush()
@@ -743,7 +941,12 @@ def run_qa(db: Session, *, job: DetailPageJob, version: DetailPageVersion) -> li
     else:
         add("FACT_SNAPSHOT", "PASS", "상품 FACT 스냅샷이 현재 데이터와 일치합니다.")
 
-    missing_required = sorted(REQUIRED_SECTIONS - set(by_type))
+    effective_required = {
+        section.section_type
+        for section in sections
+        if section.is_required
+    }
+    missing_required = sorted(effective_required - set(by_type))
     if missing_required:
         add(
             "REQUIRED_SECTIONS",
@@ -757,14 +960,20 @@ def run_qa(db: Session, *, job: DetailPageJob, version: DetailPageVersion) -> li
 
     reviews = _verified_reviews(db, job.tenant_id, job.product_id)
     review_sections = [s for s in enabled if s.section_type in {"REVIEW_SUMMARY", "REVIEW_DETAIL"}]
-    if not reviews:
+    if not reviews and review_sections:
         add(
             "REVIEW_SOURCE",
             "REVIEW",
-            "실제 고객 리뷰 데이터가 아직 연결되지 않았습니다. 리뷰 블록은 자리만 유지되고 가짜 리뷰는 생성하지 않습니다.",
+            "실제 고객 리뷰가 없으므로 리뷰 섹션을 비활성화해야 합니다. 임의 리뷰는 생성하지 않습니다.",
             severity="warning",
-            section=review_sections[0] if review_sections else None,
-            fix="실제 리뷰를 연결한 뒤 다시 QA 하세요.",
+            section=review_sections[0],
+            fix="리뷰 섹션을 비활성화하거나 검증된 실제 리뷰를 연결하세요.",
+        )
+    elif not reviews:
+        add(
+            "REVIEW_SOURCE",
+            "PASS",
+            "실제 리뷰 데이터가 없어 리뷰 섹션을 제외했습니다. 임의 리뷰는 생성하지 않습니다.",
         )
     else:
         add("REVIEW_SOURCE", "PASS", f"검증된 실제 리뷰 {len(reviews)}건이 연결되어 있습니다.")

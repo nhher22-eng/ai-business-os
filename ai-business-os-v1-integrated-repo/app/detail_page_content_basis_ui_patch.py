@@ -38,7 +38,26 @@ SCRIPT_INSERT = r'''
 function basisLines(id){return document.getElementById(id).value.split(/\n/).map(x=>x.trim()).filter(Boolean)}
 function setBasisField(id,value){document.getElementById(id).value=value||''}
 async function loadPageBasis(){
-  if(!current?.id)return;
+  if(!current?.id){
+    const productId=document.getElementById('product')?.value;
+    if(!productId)return;
+    try{
+      const d=await jf(`/api/v1/product-registration/products/${productId}?tenant_id=${tenant}`);
+      const op=d.operating_info||{};
+      const mk=d.marketing_info||{};
+      setBasisField('basisCategory',op.category||mk.category||'');
+      setBasisField('basisUsage',(op.usage||[]).join('\n'));
+      setBasisField('basisFeatures',(mk.features||[]).join('\n'));
+      setBasisField('basisSelling',(mk.selling_points||[]).join('\n'));
+      setBasisField('basisTarget',(mk.target_customer||[]).join('\n'));
+      setBasisField('basisDirection',mk.content_direction||'');
+      basisSource.textContent='현재 기준: 상품 Master 확정값';
+      basisStatus.textContent='';
+    }catch(e){
+      basisStatus.textContent=`상품 Master 기준정보 불러오기 실패: ${e.message||e}`;
+    }
+    return;
+  }
   try{
     const d=await jf(`/api/v1/detail-page-content-basis/jobs/${current.id}?tenant_id=${tenant}`);
     const b=d.basis||{};

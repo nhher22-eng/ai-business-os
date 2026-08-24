@@ -28,7 +28,7 @@ test -s "$BACKUP"
 sha256sum "$BACKUP" > "$BACKUP.sha256"
 
 echo "[3/7] Building application images"
-docker compose build api worker scheduler migrate
+docker compose build api worker image_worker scheduler migrate
 
 echo "[4/7] Applying Alembic migrations"
 docker compose run --rm migrate
@@ -38,7 +38,7 @@ docker compose run --rm --no-deps --user root api sh -lc \
   'mkdir -p /app/data && chown -R 10001:10001 /app/data'
 
 echo "[5/7] Starting updated services"
-docker compose up -d api worker scheduler
+docker compose up -d api worker image_worker scheduler
 
 echo "[6/7] Waiting for API"
 for _ in $(seq 1 30); do
@@ -54,6 +54,8 @@ curl -fsS http://localhost:8000/health/ready
 echo
 printf 'image-studio HTTP ' && curl -fsS -o /dev/null -w '%{http_code}\n' http://localhost:8000/image-studio
 printf 'detail-pages HTTP ' && curl -fsS -o /dev/null -w '%{http_code}\n' http://localhost:8000/detail-pages
+printf 'business-home HTTP ' && curl -fsS -o /dev/null -w '%{http_code}\n' http://localhost:8000/business-home
+printf 'content-copy HTTP ' && curl -fsS -o /dev/null -w '%{http_code}\n' http://localhost:8000/content-copy-studio
 
 echo "[7/7] Service status"
 docker compose ps
@@ -61,4 +63,4 @@ docker compose ps
 echo
 echo "Content Studio v1 deployment completed."
 echo "Database backup: $BACKUP"
-echo "Next: open /image-studio and /detail-pages through the same reverse-proxy/domain path used for the dashboard."
+echo "Next: open /business-home through the same reverse-proxy/domain path used for the dashboard."

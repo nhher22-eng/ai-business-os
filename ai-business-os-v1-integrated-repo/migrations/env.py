@@ -3,6 +3,8 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 from app.core.config import settings
 from app.db.models import Base
+from app.db.content_copy import ContentCopyAsset  # noqa: F401
+from app.db.product_registration import ProductSourceAsset  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)

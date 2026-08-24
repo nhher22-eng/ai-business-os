@@ -149,12 +149,12 @@ def inject_product_image_fact_ui(html: str) -> str:
 
     # Step 1 reveals only Step 2. Step 3 opens only when required Image FACT is ready.
     old_resume = "function openNextSteps(){document.getElementById('imageCard').classList.remove('hidden');document.getElementById('aiCard').classList.remove('hidden')}"
-    new_resume = "function openNextSteps(){document.getElementById('imageCard').classList.remove('hidden');document.getElementById('imageFactCard').classList.remove('hidden');document.getElementById('aiCard').classList.add('hidden')}"
+    new_resume = "function openNextSteps(){document.getElementById('imageCard').classList.remove('hidden');document.getElementById('imageFactCard').classList.remove('hidden');document.getElementById('aiCard').classList.add('hidden');if(productId)loadImageFacts()}"
     if old_resume in html:
         html = html.replace(old_resume, new_resume, 1)
 
     old_legacy = "document.getElementById('imageCard').classList.remove('hidden');document.getElementById('aiCard').classList.remove('hidden');"
-    new_legacy = "document.getElementById('imageCard').classList.remove('hidden');document.getElementById('imageFactCard').classList.remove('hidden');document.getElementById('aiCard').classList.add('hidden');"
+    new_legacy = "document.getElementById('imageCard').classList.remove('hidden');document.getElementById('imageFactCard').classList.remove('hidden');document.getElementById('aiCard').classList.add('hidden');if(productId)loadImageFacts();"
     if old_legacy in html:
         html = html.replace(old_legacy, new_legacy, 1)
 

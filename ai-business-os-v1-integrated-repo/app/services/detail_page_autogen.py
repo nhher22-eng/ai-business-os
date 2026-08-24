@@ -268,6 +268,8 @@ def auto_generate_release_candidate(
         )
     if template is None:
         raise ValueError("template not found")
+    if template.status not in {"published", "active"}:
+        raise ValueError("자동생성에는 확정·게시된 템플릿이 필요합니다.")
 
     brand = default_brand
     if brand_style_sheet_id:
@@ -287,6 +289,7 @@ def auto_generate_release_candidate(
         product_id=product_id,
         channel=channel,
         page_length=page_length,
+        generation_mode="automatic",
         created_by=created_by,
         status="generating",
     )

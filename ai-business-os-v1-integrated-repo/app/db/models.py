@@ -630,6 +630,12 @@ class ImageGeneratedAsset(Base):
     version_no: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="review")
     asset_uri: Mapped[str] = mapped_column(Text, nullable=False)
+    asset_name: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    role_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    usage_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    asset_metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     width: Mapped[int | None] = mapped_column(Integer, nullable=True)
     height: Mapped[int | None] = mapped_column(Integer, nullable=True)
     provider_name: Mapped[str | None] = mapped_column(String(40), nullable=True)
@@ -739,9 +745,29 @@ class DetailPageTemplate(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     layout_rules: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     canva_brand_template_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    status: Mapped[str] = mapped_column(String(24), nullable=False, default="active")
+
+    # User-managed template settings. Published templates are immutable;
+    # edits create a new version linked through parent_template_id.
+    workspace_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("business_workspaces.id", ondelete="CASCADE"), nullable=True
+    )
+    version_no: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    parent_template_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("detail_page_templates.id", ondelete="SET NULL"), nullable=True
+    )
+    content_rules: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    field_bindings: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    category_scope: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    channel_scope: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    canva_design_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    canva_edit_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="draft")
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
     )
 
 
@@ -807,6 +833,9 @@ class DetailPageJob(Base):
     )
     channel: Mapped[str] = mapped_column(String(80), nullable=False, default="naver-smartstore")
     page_length: Mapped[str] = mapped_column(String(16), nullable=False, default="long")
+    generation_mode: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="manual"
+    )
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="draft")
     current_version_no: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     approved_version_no: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -844,6 +873,9 @@ class DetailPageVersion(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")
     change_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     fact_snapshot_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    template_snapshot_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    external_design_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    external_design_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )

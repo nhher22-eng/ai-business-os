@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from app.db.product_image_fact import ProductImageFact
+from app.db.product_registration import ProductRegistrationProfile
+
 import base64
+import hashlib
 import mimetypes
 import re
 import struct
@@ -242,6 +246,34 @@ def build_p0_summary(
     return "\n".join(lines)
 
 
+def confirmed_dimension_spec(
+    db: Session,
+    *,
+    tenant_id: str,
+    product_id: str,
+) -> str | None:
+    """Return user-confirmed registration dimensions as the canonical size spec."""
+    profile = db.scalar(
+        select(ProductRegistrationProfile).where(
+            ProductRegistrationProfile.tenant_id == tenant_id,
+            ProductRegistrationProfile.product_id == product_id,
+        )
+    )
+    if profile is None or not profile.facts_confirmed:
+        return None
+
+    dimensions = profile.dimensions or {}
+    if not isinstance(dimensions, dict):
+        return None
+
+    parts = []
+    for key, label in (("length", "길이"), ("width", "폭"), ("height", "높이")):
+        value = dimensions.get(key)
+        if value is not None and str(value).strip():
+            parts.append(f"{label}: {str(value).strip()}")
+    return " / ".join(parts) or None
+
+
 def build_generation_prompt(
     db: Session,
     job: ImageGenerationJob,
@@ -251,6 +283,9 @@ def build_generation_prompt(
 ) -> str:
     product = db.scalar(select(Product).where(Product.id == job.product_id))
     detail = db.scalar(select(ProductDetail).where(ProductDetail.product_id == job.product_id))
+    dimension_spec = confirmed_dimension_spec(
+        db, tenant_id=job.tenant_id, product_id=job.product_id
+    )
     product_name = product.name if product else "the selected product"
     request = clean_original_brief(job.request_text) or "Create a clear commerce-ready product image."
     revision_events = db.scalars(
@@ -269,6 +304,16 @@ def build_generation_prompt(
         f"Image type: {job.image_type}. Style: {job.style_preset}. Usage: {job.usage_context}.",
         f"Original user brief: {request}",
     ]
+    if stage == "final":
+        prompt.extend(
+            [
+                "FINAL IS A HIGH-RESOLUTION REFINEMENT OF THE FIRST SUPPLIED APPROVED PREVIEW.",
+                "Preserve the approved preview's exact composition, crop, camera viewpoint, product silhouette, proportions, plant, placement, background, lighting, and colors.",
+                "Do not reinterpret, redesign, reshape, restage, or replace any visible element.",
+                "Only improve resolution, edge quality, texture clarity, and fine detail while keeping the image visually identical.",
+                "Use the remaining canonical Product Image FACT references only to prevent product-shape drift.",
+            ]
+        )
     if revision_instructions:
         prompt.append("Apply these revision instructions in order, without replacing the original brief: " + " | ".join(revision_instructions))
     if job.protection_mode == "hard_lock":
@@ -290,6 +335,8 @@ def build_generation_prompt(
         facts = [x.strip() for x in facts if x and x.strip()]
         if facts:
             prompt.append("Confirmed product facts: " + " | ".join(facts))
+    if dimension_spec:
+        prompt.append("Confirmed product dimensions: " + dimension_spec)
     if job.image_type == "SPEC_SIZE":
         prompt.extend(
             [
@@ -376,6 +423,72 @@ class OpenAIImageProvider:
                 handle.close()
 
 
+
+def ensure_product_image_fact_references(
+    db: Session,
+    job: ImageGenerationJob,
+) -> int:
+    """확정 Product Image FACT를 작업별 HARD LOCK 기준사진으로 연결합니다.
+
+    원본 파일을 복사하지 않고 같은 관리형 media URI를 참조하므로
+    Product Image FACT가 계속 외형의 단일 기준이 됩니다.
+    """
+    facts = db.scalars(
+        select(ProductImageFact)
+        .where(
+            ProductImageFact.tenant_id == job.tenant_id,
+            ProductImageFact.product_id == job.product_id,
+            ProductImageFact.status == "confirmed",
+            ProductImageFact.fact_asset_uri.is_not(None),
+        )
+        .order_by(
+            ProductImageFact.is_primary.desc(),
+            ProductImageFact.slot_index,
+            ProductImageFact.created_at,
+        )
+    ).all()
+
+    existing = db.scalars(
+        select(ImageReferenceAsset).where(
+            ImageReferenceAsset.tenant_id == job.tenant_id,
+            ImageReferenceAsset.product_id == job.product_id,
+            (
+                (ImageReferenceAsset.job_id == job.id)
+                | (ImageReferenceAsset.job_id.is_(None))
+            ),
+        )
+    ).all()
+    existing_uris = {row.asset_uri for row in existing}
+
+    created = 0
+    for fact in facts:
+        if not fact.fact_asset_uri or fact.fact_asset_uri in existing_uris:
+            continue
+
+        filename = fact.original_filename or f"product-fact-{fact.slot_type.lower()}.png"
+        db.add(
+            ImageReferenceAsset(
+                tenant_id=job.tenant_id,
+                product_id=job.product_id,
+                job_id=job.id,
+                asset_role="PRODUCT_REFERENCE",
+                component_code=None,
+                asset_uri=fact.fact_asset_uri,
+                original_filename=f"FACT-{fact.slot_type}-{filename}",
+                mime_type=fact.mime_type or "image/png",
+                internal_reference_only=True,
+                lock_level="hard_lock",
+                sort_order=fact.slot_index,
+            )
+        )
+        existing_uris.add(fact.fact_asset_uri)
+        created += 1
+
+    if created:
+        db.flush()
+    return created
+
+
 def references_for_job(db: Session, job: ImageGenerationJob) -> list[ImageReferenceAsset]:
     rows = db.scalars(
         select(ImageReferenceAsset)
@@ -390,6 +503,7 @@ def references_for_job(db: Session, job: ImageGenerationJob) -> list[ImageRefere
 
 
 def prepare_job(db: Session, job: ImageGenerationJob) -> ImageGenerationJob:
+    ensure_product_image_fact_references(db, job)
     refs = references_for_job(db, job)
     if job.protection_mode == "hard_lock":
         has_canonical = any(
@@ -402,9 +516,13 @@ def prepare_job(db: Session, job: ImageGenerationJob) -> ImageGenerationJob:
                 "HARD LOCK 작업에는 PRODUCT_REFERENCE 또는 COMPONENT_REFERENCE 기준 이미지가 필요합니다."
             )
     if job.image_type == "SPEC_SIZE":
-        detail = db.scalar(select(ProductDetail).where(ProductDetail.product_id == job.product_id))
-        if detail is None or not (detail.specification or "").strip():
-            raise ImageStudioError("SPEC_SIZE 작업에는 확정 상품 스펙이 필요합니다.")
+        dimension_spec = confirmed_dimension_spec(
+            db, tenant_id=job.tenant_id, product_id=job.product_id
+        )
+        if not dimension_spec:
+            raise ImageStudioError(
+                "SPEC_SIZE 작업에는 상품등록에서 확정한 길이·폭·높이 FACT가 필요합니다."
+            )
     job.p0_summary = build_p0_summary(db, job, refs)
     job.status = "p0_ready"
     db.commit()
@@ -413,10 +531,13 @@ def prepare_job(db: Session, job: ImageGenerationJob) -> ImageGenerationJob:
 
 
 def _managed_reference_paths(references: list[ImageReferenceAsset]) -> list[Path]:
+    # Prefer references explicitly attached to this generation job.
+    # These are the confirmed Product Image FACT assets prepared as HARD LOCK inputs.
+    job_references = [ref for ref in references if ref.job_id is not None]
+    selected = job_references or references
+
     paths = []
-    for ref in references:
-        if ref.internal_reference_only:
-            continue
+    for ref in selected:
         if not ref.asset_uri.startswith("media://"):
             continue
         paths.append(resolve_media_uri(ref.asset_uri))
@@ -433,10 +554,19 @@ def _next_asset_version(db: Session, job_id: str, stage: str) -> int:
     return int(current or 0) + 1
 
 
-def _save_generated(job: ImageGenerationJob, stage: str, version: int, data: bytes) -> str:
+def build_asset_filename(
+    *, product_code: str, role_code: str, usage_code: str, stage: str, version: int
+) -> str:
+    """Stable filename for a reusable image element asset."""
+    parts = [product_code, role_code, usage_code, stage, f"v{version:02d}"]
+    safe = [re.sub(r"[^A-Za-z0-9_-]+", "-", str(part)).strip("-").upper() for part in parts]
+    return "_".join(part or "NA" for part in safe) + ".png"
+
+
+def _save_generated(job: ImageGenerationJob, filename: str, data: bytes) -> str:
     directory = media_root() / "generated" / job.id
     directory.mkdir(parents=True, exist_ok=True)
-    path = directory / f"{stage}-v{version}.png"
+    path = directory / filename
     path.write_bytes(data)
     return f"media://{path.relative_to(media_root()).as_posix()}"
 
@@ -512,14 +642,20 @@ def run_image_qa(
     )
 
     if job.image_type == "SPEC_SIZE":
-        detail = db.scalar(select(ProductDetail).where(ProductDetail.product_id == job.product_id))
-        has_spec = bool(detail and (detail.specification or "").strip())
+        dimension_spec = confirmed_dimension_spec(
+            db, tenant_id=job.tenant_id, product_id=job.product_id
+        )
+        has_spec = bool(dimension_spec)
         checks.append(
             (
                 "SPEC_SOURCE",
                 "PASS" if has_spec else "FAIL",
                 "error" if not has_spec else "info",
-                "확정 상품 DB 스펙을 사용합니다." if has_spec else "확정 상품 스펙이 없습니다.",
+                (
+                    f"상품등록에서 확정한 치수 FACT를 사용합니다: {dimension_spec}"
+                    if has_spec
+                    else "상품등록에서 확정한 길이·폭·높이 FACT가 없습니다."
+                ),
             )
         )
 
@@ -568,7 +704,7 @@ def generate_stage(db: Session, job: ImageGenerationJob, stage: str) -> ImageGen
         )
         if preview is None:
             raise ImageStudioError("FINAL 생성 전 승인된 P1 Preview가 필요합니다.")
-        input_paths.append(resolve_media_uri(preview.asset_uri))
+        input_paths.insert(0, resolve_media_uri(preview.asset_uri))
 
     if job.protection_mode == "hard_lock" and not input_paths:
         raise ImageStudioError("HARD LOCK 생성에 사용할 관리형 기준 이미지가 없습니다.")
@@ -600,7 +736,16 @@ def generate_stage(db: Session, job: ImageGenerationJob, stage: str) -> ImageGen
         raise
 
     version = _next_asset_version(db, job.id, stage)
-    uri = _save_generated(job, stage, version, image_bytes)
+    product = db.scalar(select(Product).where(Product.id == job.product_id))
+    product_code = product.product_code if product is not None else job.product_id
+    filename = build_asset_filename(
+        product_code=product_code,
+        role_code=job.image_type,
+        usage_code=job.usage_context,
+        stage=stage,
+        version=version,
+    )
+    uri = _save_generated(job, filename, image_bytes)
     asset = ImageGeneratedAsset(
         tenant_id=job.tenant_id,
         job_id=job.id,
@@ -608,6 +753,18 @@ def generate_stage(db: Session, job: ImageGenerationJob, stage: str) -> ImageGen
         version_no=version,
         status="review",
         asset_uri=uri,
+        asset_name=f"{product_code} {job.image_type} {job.usage_context}",
+        filename=filename,
+        role_code=job.image_type,
+        usage_code=job.usage_context,
+        content_hash=hashlib.sha256(image_bytes).hexdigest(),
+        asset_metadata={
+            "product_code": product_code,
+            "style_preset": job.style_preset,
+            "aspect_ratio": job.aspect_ratio,
+            "protection_mode": job.protection_mode,
+            "source": "image_asset_generator",
+        },
         width=width,
         height=height,
         provider_name="openai",

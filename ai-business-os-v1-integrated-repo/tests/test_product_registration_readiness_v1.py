@@ -87,8 +87,7 @@ def test_registration_readiness_blocks_until_fact_and_required_images_are_confir
         initial = registration_readiness(db, tenant_id=TENANT, product_id=product.id)
         assert initial["ready"] is False
         assert "기본 FACT 사용자 확정" in initial["missing_labels"]
-        assert "45도 우측" in initial["missing_labels"]
-        assert "정면" in initial["missing_labels"]
+        assert "원본 이미지 최소 1개" in initial["missing_labels"]
 
         profile.facts_confirmed = True
         profile.primary_image_asset_id = "primary-reference"
@@ -96,7 +95,7 @@ def test_registration_readiness_blocks_until_fact_and_required_images_are_confir
         db.commit()
 
         one_missing = registration_readiness(db, tenant_id=TENANT, product_id=product.id)
-        assert one_missing["ready"] is False
+        assert one_missing["ready"] is True
         assert one_missing["facts_confirmed"] is True
         assert one_missing["primary_asset_linked"] is True
         assert one_missing["missing_image_slots"] == ["FRONT"]
@@ -109,7 +108,7 @@ def test_registration_readiness_blocks_until_fact_and_required_images_are_confir
         assert complete["missing_labels"] == []
         assert complete["images_ready"] is True
         assert complete["product_status"] == "draft"
-        assert "핵심 등록 완료" in complete["note"]
+        assert "상품등록 완료" in complete["note"]
     finally:
         db.close()
 

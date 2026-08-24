@@ -45,7 +45,7 @@ select,input,textarea{width:100%;border:1px solid #d9e0ea;border-radius:10px;pad
 </main></div>
 <script>
 const tenant="__legacy__";
-let workspace=null, products=[], currentJob=null, currentAsset=null, selectedAssetId=null, busy=false;
+let workspace=null, products=[], currentJob=null, currentAsset=null, selectedAssetId=null, busy=false, finalPollJobId=null, finalPollTimer=null;
 const el=(id)=>document.getElementById(id);
 function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]||c))}
 
@@ -113,7 +113,16 @@ async function init(){
   products=await jsonFetch(`/api/v1/business/products?tenant_id=${tenant}&workspace_id=${workspace.id}`);
   el('product').innerHTML=products.map(x=>`<option value="${x.id}">${x.name}</option>`).join('');
   if(!products.length){el('meta').textContent='등록된 상품이 없습니다.';return}
+  const requestedProduct=new URLSearchParams(location.search).get('product_id');
+  if(requestedProduct&&products.some(x=>x.id===requestedProduct)){
+    el('product').value=requestedProduct;
+  }
+  el('product').onchange=()=>{
+    const selected=el('product').value;
+    location.href=`/image-studio?product_id=${encodeURIComponent(selected)}`;
+  };
   await loadSkus();
+  await loadConfirmedImagePlans();
   const rows=await loadJobs();
   if(!currentJob && rows && rows.length){await openJob(rows[0].id);}
   updateControls();
@@ -124,9 +133,108 @@ async function loadSkus(){
   const rows=await jsonFetch(`/api/v1/business/skus?tenant_id=${tenant}&product_id=${pid}`);
   el('sku').innerHTML='<option value="">전체 상품</option>'+rows.map(x=>`<option value="${x.id}">${x.option_value||x.name}</option>`).join('');
 }
+
+let confirmedImagePlans=[];
+
+function ensureImagePlanPanel(){
+  if(el('confirmedPlanPanel'))return;
+  const createButton=document.querySelector('button[onclick="createJob()"]');
+  const createSection=createButton?.closest('.section');
+  if(!createSection)return;
+
+  const panel=document.createElement('div');
+  panel.id='confirmedPlanPanel';
+  panel.className='section';
+  panel.innerHTML=`
+    <div class="label">확정 이미지 기획</div>
+    <select id="confirmedPlanSelect" onchange="applyConfirmedImagePlan(this.value)">
+      <option value="">기획을 선택하세요</option>
+    </select>
+    <div id="confirmedPlanStatus" class="muted" style="margin-top:7px;line-height:1.5">
+      상품등록에서 확정한 이미지 기획을 불러옵니다.
+    </div>`;
+  createSection.parentNode.insertBefore(panel,createSection);
+}
+
+function applyConfirmedImagePlan(indexValue){
+  if(indexValue==='')return;
+  const item=confirmedImagePlans[Number(indexValue)];
+  if(!item)return;
+
+  const typeMap={
+    hero:'HERO',
+    use_scene:'LIFESTYLE',
+    feature_focus:'FEATURE',
+    detail:'DETAIL',
+    simple_usage_flow:'EXPLANATION',
+    line_drawing:'SPEC_SIZE',
+    components:'COMPONENTS',
+    extra:'LIFESTYLE'
+  };
+
+  const wantedType=typeMap[item.category]||'LIFESTYLE';
+  const imageType=el('imageType');
+  if(imageType&&[...imageType.options].some(option=>option.value===wantedType)){
+    imageType.value=wantedType;
+  }
+
+  const protection=el('protection');
+  if(protection&&[...protection.options].some(option=>option.value==='hard_lock')){
+    protection.value='hard_lock';
+  }
+
+  const basis=(item.basis||[]).join(' · ');
+  const request=[
+    item.title,
+    item.purpose?`목적: ${item.purpose}`:'',
+    basis?`확정 근거: ${basis}`:'',
+    item.execution?`실행 방식: ${item.execution}`:'',
+    item.required_reference?`추가 기준 이미지 필요: ${item.required_reference}`:'',
+    '상품 외형·재질·색상·부품은 Product Image FACT를 변경하지 않습니다.'
+  ].filter(Boolean).join('\n');
+
+  el('request').value=request;
+  el('confirmedPlanStatus').innerHTML=
+    `<strong>${escapeHtml(item.category_label||item.category)}</strong><br>`+
+    `${escapeHtml(item.title||'')}<br>`+
+    `<span class="muted">기획 내용을 작업 요청에 적용했습니다. 기준사진을 확인한 뒤 작업을 만드세요.</span>`;
+}
+
+async function loadConfirmedImagePlans(){
+  ensureImagePlanPanel();
+  const productId=el('product').value;
+  if(!productId)return;
+
+  const select=el('confirmedPlanSelect');
+  const status=el('confirmedPlanStatus');
+
+  try{
+    const data=await jsonFetch(
+      `/api/v1/product-registration/products/${productId}/image-plans?tenant_id=${tenant}`
+    );
+    confirmedImagePlans=data.plans||[];
+    select.innerHTML='<option value="">기획을 선택하세요</option>'+
+      confirmedImagePlans.map((item,index)=>
+        `<option value="${index}">${escapeHtml(item.category_label||item.category)} · ${escapeHtml(item.title||'')}</option>`
+      ).join('');
+
+    status.textContent=confirmedImagePlans.length
+      ? `확정 이미지 기획 ${confirmedImagePlans.length}개 · 제작할 기획을 선택하세요.`
+      : '이 상품에 확정된 이미지 기획이 없습니다. 상품등록에서 먼저 기획을 확정하세요.';
+  }catch(error){
+    confirmedImagePlans=[];
+    select.innerHTML='<option value="">기획을 선택하세요</option>';
+    status.textContent=`이미지 기획 불러오기 실패: ${error.message||error}`;
+  }
+}
+
 async function loadJobs(){
-  const rows=await jsonFetch(`/api/v1/images/jobs?tenant_id=${tenant}`);
-  el('jobs').innerHTML=rows.slice(0,12).map(x=>`<div class="job ${currentJob&&x.id===currentJob.id?'active':''}" onclick="openJob('${x.id}')"><strong>${products.find(p=>p.id===x.product_id)?.name||x.product_id}</strong><span class="muted">${x.image_type} · ${x.aspect_ratio} · ${x.status}</span></div>`).join('');
+  const productId=el('product').value;
+  if(!productId){el('jobs').innerHTML='';return []}
+  const rows=await jsonFetch(`/api/v1/images/jobs?tenant_id=${tenant}&product_id=${encodeURIComponent(productId)}`);
+  el('jobs').innerHTML=rows.length
+    ? rows.slice(0,12).map(x=>`<div class="job ${currentJob&&x.id===currentJob.id?'active':''}" onclick="openJob('${x.id}')"><strong>${products.find(p=>p.id===x.product_id)?.name||x.product_id}</strong><span class="muted">${x.image_type} · ${x.aspect_ratio} · ${x.status}</span></div>`).join('')
+    : '<div class="muted" style="padding:10px">이 상품의 이미지 작업이 아직 없습니다.</div>';
   return rows;
 }
 async function createJob({silent=false}={}){
@@ -147,12 +255,20 @@ async function createJob({silent=false}={}){
   }
 }
 async function ensureJob(){
-  if(currentJob) return currentJob;
+  if(currentJob&&currentJob.product_id===el('product').value)return currentJob;
+  currentJob=null;
+  currentAsset=null;
+  selectedAssetId=null;
   return await createJob({silent:true});
 }
 async function openJob(id){
-  if(!currentJob || currentJob.id!==id) selectedAssetId=null;
-  currentJob=await jsonFetch(`/api/v1/images/jobs/${id}?tenant_id=${tenant}`);
+  const opened=await jsonFetch(`/api/v1/images/jobs/${id}?tenant_id=${tenant}`);
+  if(opened.product_id!==el('product').value){
+    alert('현재 선택한 상품과 다른 이미지 작업은 열 수 없습니다.');
+    return;
+  }
+  if(!currentJob||currentJob.id!==id)selectedAssetId=null;
+  currentJob=opened;
   renderJob(currentJob);
   await loadJobs();
 }

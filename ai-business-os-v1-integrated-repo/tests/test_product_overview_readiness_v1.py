@@ -90,11 +90,11 @@ def test_overview_readiness_exposes_missing_required_image_then_complete():
             product_id=product.id,
             profile=profile,
         )
-        assert incomplete["ready"] is False
+        assert incomplete["ready"] is True
         assert incomplete["facts_confirmed"] is True
         assert incomplete["has_primary_image"] is True
         assert incomplete["missing_image_slots"] == ["FRONT"]
-        assert "정면" in incomplete["missing_labels"]
+        assert incomplete["missing_labels"] == []
 
         db.add(_confirmed(product.id, "FRONT"))
         db.commit()

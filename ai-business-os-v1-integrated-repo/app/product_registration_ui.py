@@ -13,26 +13,29 @@ HTML = r"""
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>새 상품 등록 · AI Business OS</title>
 <style>
-*{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,sans-serif;background:#0b0f17;color:#e5e7eb}
-.wrap{max-width:980px;margin:0 auto;padding:28px}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:20px}
-a{color:#b8c7dd;text-decoration:none}.card{background:#111827;border:1px solid #263247;border-radius:16px;padding:20px;margin-bottom:16px}
+*{box-sizing:border-box} body{margin:0;font-family:Inter,Pretendard,"Noto Sans KR",system-ui,sans-serif;background:#f4f6fa;color:#172033}
+.side{position:fixed;inset:0 auto 0 0;width:220px;background:#14243b;color:#dbe5f2;padding:22px 14px;z-index:5}.brand{font-size:18px;font-weight:800;padding:0 10px 22px}.side a{display:block;color:#dbe5f2;padding:10px;border-radius:9px;margin:3px 0}.side a:hover,.side a.active{background:#2763dc;color:#fff}.nav-label{font-size:11px;color:#8498b4;padding:18px 10px 6px}
+.wrap{max-width:1280px;margin-left:220px;padding:28px}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:20px}
+a{color:#52637a;text-decoration:none}.card{background:#fff;border:1px solid #dfe5ee;border-radius:14px;padding:20px;margin-bottom:16px;box-shadow:0 2px 8px rgba(23,32,51,.035)}
 h1,h2{margin:0 0 12px}.muted{color:#8ea0b7;font-size:13px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field{display:flex;flex-direction:column;gap:6px}.full{grid-column:1/-1}
-input,textarea,select{width:100%;padding:11px 12px;border-radius:10px;border:1px solid #35445a;background:#0b1220;color:#fff}textarea{min-height:84px;resize:vertical}
-button{padding:11px 16px;border-radius:10px;border:1px solid #35445a;background:#e5e7eb;color:#111827;font-weight:800;cursor:pointer}.secondary{background:#182337;color:#fff}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}.step{display:inline-block;padding:5px 9px;border:1px solid #35445a;border-radius:999px;font-size:12px;font-weight:800;margin-bottom:10px}.hidden{display:none}.status{margin-top:10px;font-size:13px;color:#9fb1c8}.suggestion{padding:12px 0;border-bottom:1px solid #253044}.suggestion:last-child{border-bottom:0}.ok{color:#a7f3d0}.warn{color:#fde68a}
-@media(max-width:720px){.grid{grid-template-columns:1fr}.full{grid-column:auto}.wrap{padding:18px}}
+input,textarea,select{width:100%;padding:11px 12px;border-radius:9px;border:1px solid #cbd5e1;background:#fff;color:#172033}textarea{min-height:84px;resize:vertical}
+button{padding:11px 16px;border-radius:9px;border:1px solid #2763dc;background:#2763dc;color:#fff;font-weight:800;cursor:pointer}.secondary{background:#edf3ff;color:#1f55b5;border:1px solid #cfddfa}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}.step{display:inline-block;padding:5px 9px;background:#edf3ff;color:#1f55b5;border-radius:999px;font-size:12px;font-weight:800;margin-bottom:10px}.hidden{display:none}.status{margin-top:10px;font-size:13px;color:#65748a}.suggestion{padding:12px 0;border-bottom:1px solid #e5eaf1}.suggestion:last-child{border-bottom:0}.ok{color:#226746}.warn{color:#8a6111}.guide{margin:10px 0;padding:11px;border-radius:9px;background:#fff8e8;color:#74530d;border:1px solid #f1ddb1;font-size:13px}
+@media(max-width:900px){.side{display:none}.wrap{margin:0;padding:18px}.grid{grid-template-columns:1fr}.full{grid-column:auto}}
 </style>
 </head>
 <body>
+<aside class="side"><div class="brand">AI Business OS</div><a href="/business-home">홈</a><div class="nav-label">공통 제작도구</div><a class="active" href="/product-registration">상품 기본정보 등록</a><a href="/image-assets">이미지 요소 자산</a><a href="/content-copy-studio">콘텐츠 문안</a><a href="/template-maker">템플릿 제작</a><a href="/detail-page-builder">상세페이지 생성</a><div class="nav-label">보조·관리</div><a href="/image-studio">기존 이미지 생성기</a><a href="/dashboard">기존 운영화면</a></aside>
 <div class="wrap">
   <div class="top">
     <div><h1>새 상품 등록</h1><div class="muted">사용자는 확정 FACT만 입력하고, 나머지는 AI가 제안합니다.</div></div>
-    <a href="/dashboard">← 대시보드</a>
+    <a href="/business-home">← 전체 홈</a>
   </div>
 
   <section class="card" id="factCard">
     <div class="step">1 · 기본 FACT</div>
     <h2>상품 자체의 확정값</h2>
     <div class="muted">모르는 값은 비워둘 수 있습니다. AI가 물리적 사실을 임의로 채우지 않습니다.</div>
+    <div class="guide">직접 확인한 값만 입력하세요. 빈 항목은 오류가 아니며, AI 제안으로 채운 내용은 별도의 2차 FACT 후보로 관리됩니다.</div>
     <div class="grid" style="margin-top:16px">
       <div class="field full"><label>Workspace</label><select id="workspace"></select></div>
       <div class="field"><label>품명 *</label><input id="name" placeholder="예: 8mm 자동 관수키트"></div>
@@ -56,9 +59,9 @@ button{padding:11px 16px;border-radius:10px;border:1px solid #35445a;background:
   </section>
 
   <section class="card hidden" id="imageCard">
-    <div class="step">2 · 상품 이미지</div>
-    <h2>대표·추가 이미지</h2>
-    <div class="muted">직접 업로드한 이미지는 상품 자산으로 저장되어 이미지 생성·상세페이지에서도 재사용됩니다.</div>
+    <div class="step">2 · 원본 이미지 FACT</div>
+    <h2>직접 촬영·확보한 원본 등록</h2>
+    <div class="muted">여기에는 가공 결과가 아니라 원본을 등록합니다. 역할이 아직 없는 사진도 추가 이미지로 보관할 수 있습니다.</div>
     <div class="grid" style="margin-top:16px">
       <div class="field"><label>대표 이미지</label><input type="file" accept="image/*" id="primaryImage"></div>
       <div class="field"><label>추가 이미지</label><input type="file" accept="image/*" id="additionalImage" multiple></div>

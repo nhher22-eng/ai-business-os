@@ -58,14 +58,13 @@ def _master_readiness(
     missing: list[str] = []
     if not facts_confirmed:
         missing.append("기본 FACT")
-    missing.extend(images.get("missing_labels") or [])
-    if images.get("ready") and not primary:
-        missing.append("대표 이미지 연결")
+    if not primary:
+        missing.append("원본 이미지 최소 1개")
 
     return {
-        "ready": facts_confirmed and bool(images.get("ready")) and primary,
+        "ready": facts_confirmed and primary,
         "facts_confirmed": facts_confirmed,
-        "images_ready": bool(images.get("ready")),
+        "images_ready": primary,
         "missing_image_slots": images.get("missing_slots") or [],
         "missing_labels": missing,
         "has_primary_image": primary,

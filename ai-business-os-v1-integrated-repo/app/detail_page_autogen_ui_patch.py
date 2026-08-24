@@ -152,6 +152,60 @@ init=async function(){
   await _baseInitForFactEditor();
   if(product){product.addEventListener('change',()=>loadFactEditor().catch(()=>{}));updateFactEditorContext();await loadFactEditor()}
 }
+
+async function loadProductMasterFactsBridge(){
+  const productId=document.getElementById('product')?.value;
+  const row=products.find(x=>x.id===productId);
+  const status=document.getElementById('factEditorStatus');
+  const label=document.getElementById('factEditorProductLabel');
+  if(label)label.textContent=`현재 편집 상품: ${row?row.name:'선택 없음'}`;
+  showFactEditor(!!row);
+  clearFactEditorFields();
+  if(!productId)return;
+  try{
+    const d=await jf(`/api/v1/product-registration/products/${productId}?tenant_id=${tenant}`);
+    const f=d.facts||{};
+    const op=d.operating_info||{};
+    const mk=d.marketing_info||{};
+    const dims=f.dimensions||{};
+    const packaging=f.packaging||{};
+
+    const specification=[
+      f.model_name?`모델명: ${f.model_name}`:'',
+      f.manufacturer?`제조사: ${f.manufacturer}`:'',
+      f.main_material?`주재질: ${f.main_material}`:'',
+      f.sub_material?`보조재질: ${f.sub_material}`:'',
+      f.weight?`중량: ${f.weight}`:'',
+      f.origin?`원산지: ${f.origin}`:'',
+      dims.length?`길이: ${dims.length}`:'',
+      dims.width?`폭: ${dims.width}`:'',
+      dims.height?`높이: ${dims.height}`:'',
+      f.certification?`인증: ${f.certification}`:'',
+      packaging.individual?`개별 포장: ${packaging.individual}`:'',
+      packaging.box_unit?`박스 단위 포장: ${packaging.box_unit}`:'',
+      f.fact_notes||''
+    ].filter(Boolean).join('\n');
+
+    const setValue=(id,value)=>{
+      const el=document.getElementById(id);
+      if(el)el.value=value||'';
+    };
+
+    setValue('factSpecification',specification);
+    setValue('factUsage',(op.usage||[]).join('\n'));
+    setValue('factInstallation',op.installation_method||'');
+    setValue('factConditions',op.usage_conditions||'');
+    setValue('factCautions',(mk.product_notes||[]).join('\n'));
+
+    if(status)status.innerHTML=`<strong>${esc(row?.name||d.product?.name||'상품')}</strong> · Product Master 확정 FACT를 불러왔습니다.`;
+    if(typeof loadPageBasis==='function')await loadPageBasis();
+  }catch(e){
+    if(status)status.textContent=`Product Master FACT 불러오기 실패: ${e.message||e}`;
+  }
+}
+
+loadFactEditor=loadProductMasterFactsBridge;
+
 '''.strip()
 
 

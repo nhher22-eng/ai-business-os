@@ -159,6 +159,44 @@ def _fallback_plans(
             status="fact",
         ))
 
+    detail_sources = features + selling
+    detail_hint = next(
+        (
+            x for x in detail_sources
+            if any(
+                keyword in x
+                for keyword in (
+                    "바퀴", "배수", "출수구", "드레인", "재질", "원목",
+                    "마감", "연결", "부품", "손잡이", "조절", "고정"
+                )
+            )
+        ),
+        "",
+    )
+    if detail_hint:
+        detail_reference = "RIGHT_45" if "RIGHT_45" in slots else "DETAIL"
+        plans.append(_plan(
+            "detail",
+            "확정 기능·재질 부분상세",
+            "구매자가 실제 기능과 재질을 가까이 확인",
+            [f"확정 특징/판매포인트: {detail_hint}", f"{detail_reference} 이미지 FACT"],
+            "기존 확정 이미지의 안전한 확대·크롭 또는 추가 실사진",
+            status="review",
+            note="확정 이미지에서 실제로 보이는 부분만 사용하며, 보이지 않으면 DETAIL 사진을 추가합니다.",
+            required_reference=detail_reference,
+        ))
+
+    if _dimensions_present(facts) and "FRONT" in slots:
+        plans.append(_plan(
+            "extra",
+            "실측 크기와 공간 배치를 보여주는 이미지",
+            "구매자가 설치 공간과 제품 크기를 쉽게 비교",
+            ["확정 치수 FACT", "FRONT 이미지 FACT"],
+            "정면 이미지와 확정 치수를 사용한 정보 그래픽",
+            status="fact",
+            required_reference="FRONT",
+        ))
+
     packaging = facts.get("packaging") or {}
     component_hint = _clean_text(facts.get("fact_notes"))
     if isinstance(packaging, dict) and any(_clean_text(v) for v in packaging.values()):
@@ -227,11 +265,11 @@ Hard rules:
 1. Never invent or alter product shape, components, material, color, dimensions, quantity, installation method, performance or effect.
 2. Every plan must reference Product Image FACT for product appearance.
 3. If physical detail is not visible in available image FACT, do not propose generative reconstruction; say additional reference photo is needed.
-4. Category counts: hero 1-3, use_scene 0-3, feature_focus 0-3, detail 0-3, simple_usage_flow 0-2, line_drawing exactly two when FRONT and RIGHT_45 are available (front size/spec + right-45 explanation/caution), components 0-2, extra 0-2.
+4. Category counts: hero 1-3. When confirmed usage exists, use_scene 1-2; otherwise 0-1. When confirmed features or selling points exist, feature_focus 1-3. When a visible feature, material, wheel, drain, connector, control, finish or other physical detail exists, detail 1-3; otherwise 0-1 and clearly request an additional DETAIL reference. simple_usage_flow 0-2. line_drawing exactly two when FRONT and RIGHT_45 are available (front size/spec + right-45 explanation/caution). components 0-2 only when confirmed component facts exist. Add extra 1-2 when confirmed dimensions or another product-specific fact supports a useful non-duplicate idea.
 5. simple_usage_flow is only a simple, ordinary 2-5 step usage-content idea. Never make a complex assembly/install manual.
 6. line_drawing front is normally for size/spec. 45-degree is a reusable base drawing for later explanation/caution. Numeric dimensions only when confirmed FACT contains them.
 7. detail may recommend existing FACT image use/crop instead of generation.
-8. Avoid duplicate ideas across categories. Total should normally be 6-10; fewer is fine when the product does not need them.
+8. Avoid duplicate ideas across categories. Total should normally be 8-12 when confirmed usage, dimensions and two required product images are available. Do not leave use_scene or detail empty when confirmed facts can support them. Fewer is fine only when canonical inputs are genuinely insufficient.
 9. Output Korean JSON only, array of objects with keys: category,title,purpose,basis,execution,status,note,required_reference.
 10. category must be one of: {', '.join(IMAGE_PLAN_CATEGORIES)}. status is fact or review.
 
@@ -271,6 +309,12 @@ Product: {product_name}
                 note=_clean_text(item.get("note")) or None,
                 required_reference=_clean_text(item.get("required_reference")) or None,
             ))
+        if result:
+            existing_categories = {plan["category"] for plan in result}
+            for candidate in fallback:
+                if candidate["category"] in {"use_scene", "detail", "extra"} and candidate["category"] not in existing_categories:
+                    result.append(candidate)
+                    existing_categories.add(candidate["category"])
         return (result or fallback)[:12], {"provider": "openai-image-planner", "model": model}
     except Exception as exc:
         return fallback, {

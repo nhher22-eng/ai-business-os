@@ -46,15 +46,32 @@ const imagePlanCategoryHelp={
 let currentImagePlans=[];
 
 function imagePlanBadge(item){
+  if(item.confirmed)return '<span style="color:#a7f3d0;font-size:12px;font-weight:800">✓ 사용자 확정</span>';
   if(item.status==='fact')return '<span style="color:#a7f3d0;font-size:12px;font-weight:800">✓ FACT 기반</span>';
   return '<span style="color:#fde68a;font-size:12px;font-weight:800">⚠ 확인 필요</span>';
 }
+function imageReferenceReady(reference){
+  const ref=String(reference||'').trim();
+  if(!ref)return true;
+  const label=(typeof imageFactSlotLabels!=='undefined'&&imageFactSlotLabels[ref])?imageFactSlotLabels[ref]:ref;
+  return [...document.querySelectorAll('#imageFactGrid > div')].some(card=>{
+    const title=card.querySelector('strong')?.textContent?.trim()||'';
+    const confirmed=[...card.querySelectorAll('.ok')].some(x=>x.textContent.includes('확정 FACT'));
+    return confirmed&&(title===label||title.includes(label)||label.includes(title));
+  });
+}
+function imageReferenceLabel(reference){
+  const ref=String(reference||'').trim();
+  return (typeof imageFactSlotLabels!=='undefined'&&imageFactSlotLabels[ref])?imageFactSlotLabels[ref]:ref;
+}
 function imagePlanRow(item,category,index){
   const basis=(item.basis||[]).join(' · ');
-  const checked=item.status==='fact'?'checked':'';
-  const needsRef=item.required_reference?`<div class="warn" style="margin-top:7px">추가 기준 이미지 필요: ${escapeHtml(item.required_reference)}</div>`:'';
+  const checked=(item.confirmed||item.status==='fact')?'checked':'';
+  const refReady=imageReferenceReady(item.required_reference);
+  const refLabel=imageReferenceLabel(item.required_reference);
+  const needsRef=item.required_reference?(refReady?`<div class="ok" style="margin-top:7px">사용할 기준 이미지: ${escapeHtml(refLabel)} · ✓ 준비 완료</div>`:`<div class="warn" style="margin-top:7px">추가 기준 이미지 필요: ${escapeHtml(refLabel)}</div>`):'';
   const note=item.note?`<div class="muted" style="margin-top:7px">${escapeHtml(item.note)}</div>`:'';
-  return `<div class="image-plan-row" data-category="${category}" data-index="${index}" style="border:1px solid #35445a;border-radius:12px;padding:12px;margin-top:9px;background:${item.status==='fact'?'#0b1c1a':'#211c10'}">
+  return `<div class="image-plan-row" data-category="${category}" data-index="${index}" style="border:1px solid #35445a;border-radius:12px;padding:12px;margin-top:9px;background:${(item.confirmed||item.status==='fact')?'#0b1c1a':'#211c10'}">
     <div style="display:flex;gap:8px;align-items:center">
       <input class="image-plan-use" type="checkbox" ${checked} style="width:auto">
       <input class="image-plan-title" value="${escapeHtml(item.title||'')}" style="flex:1;font-weight:800">
@@ -91,7 +108,7 @@ function renderImagePlans(data){
 }
 function refreshImagePlanCount(){
   const all=[...document.querySelectorAll('.image-plan-row')];const selected=all.filter(x=>x.querySelector('.image-plan-use')?.checked);
-  const needRef=selected.filter(x=>x.querySelector('.image-plan-required-reference')?.value.trim());
+  const needRef=selected.filter(x=>{const ref=x.querySelector('.image-plan-required-reference')?.value.trim();return ref&&!imageReferenceReady(ref)});
   const el=document.getElementById('imagePlanCount');if(el)el.innerHTML=`이미지 기획 ${all.length}개 · 선택 ${selected.length}개${needRef.length?` · <span class="warn">추가 기준사진 필요 ${needRef.length}개</span>`:''}`;
 }
 function collectImagePlans(){
@@ -121,7 +138,7 @@ async function confirmImagePlans(){
 async function restoreConfirmedImagePlans(){
   if(!productId)return;try{
     const data=await api(`/api/v1/product-registration/products/${productId}/image-plans?tenant_id=${tenant}`);
-    if(data.policy?.plans_confirmed){document.getElementById('imagePlanCard').classList.remove('hidden');renderImagePlans({plans:data.plans||[]});document.getElementById('imagePlanActions').classList.add('hidden');document.getElementById('imagePlanStatus').innerHTML='<span class="ok">저장된 확장 이미지 기획을 불러왔습니다.</span>';}
+    if(data.policy?.plans_confirmed){document.getElementById('imagePlanCard').classList.remove('hidden');renderImagePlans({plans:(data.plans||[]).map(x=>({...x,confirmed:true}))});document.getElementById('imagePlanActions').classList.add('hidden');document.getElementById('imagePlanStatus').innerHTML='<span class="ok">저장된 확장 이미지 기획을 불러왔습니다.</span>';}
   }catch(_){ }
 }
 

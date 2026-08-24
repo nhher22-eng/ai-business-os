@@ -87,7 +87,13 @@ def _section_payload(row: DetailPageSection) -> dict:
         "content": row.content_json,
         "image_asset_id": row.image_asset_id,
         "image_content_url": (
-            f"/api/v1/images/assets/{row.image_asset_id}/content?tenant_id={row.tenant_id}" if row.image_asset_id else None
+            f"/api/v1/images/assets/{row.image_asset_id}/content?tenant_id={row.tenant_id}"
+            if row.image_asset_id
+            else (
+                f"/api/v1/product-image-facts/images/{(row.content_json or {}).get('product_image_fact_id')}/content?tenant_id={row.tenant_id}"
+                if (row.content_json or {}).get("product_image_fact_id")
+                else None
+            )
         ),
         "qa_status": row.qa_status,
     }
@@ -192,6 +198,7 @@ class JobCreateBody(BaseModel):
     product_id: str
     channel: str = "naver-smartstore"
     page_length: Literal["long", "short"] = "long"
+    generation_mode: Literal["automatic", "manual"] = "manual"
     created_by: str | None = None
 
 
@@ -303,6 +310,7 @@ def create_job(
         product_id=body.product_id,
         channel=body.channel,
         page_length=body.page_length,
+        generation_mode=body.generation_mode,
         created_by=body.created_by,
     )
     db.add(row)
@@ -352,6 +360,14 @@ def prepare_job(
         )
     if template is None:
         raise HTTPException(404, detail="template not found")
+    if job.generation_mode == "automatic" and template.status not in {
+        "published",
+        "active",
+    }:
+        raise HTTPException(
+            409,
+            detail="자동생성에는 템플릿 설정에서 확정·게시한 템플릿이 필요합니다.",
+        )
     if body.brand_style_sheet_id:
         brand = db.scalar(
             select(BrandStyleSheet).where(

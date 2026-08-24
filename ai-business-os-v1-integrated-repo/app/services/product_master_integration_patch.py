@@ -62,30 +62,95 @@ def confirmed_master_facts(profile: ProductRegistrationProfile | None) -> dict[s
     return {key: value for key, value in values.items() if _has_value(value)}
 
 
+def _render_dimensions(value: Any) -> str:
+    if not isinstance(value, dict):
+        return str(value or "").strip()
+
+    labels = {
+        "length": "길이",
+        "width": "폭",
+        "height": "높이",
+        "depth": "깊이",
+        "diameter": "지름",
+    }
+    preferred_order = ("length", "width", "height", "depth", "diameter")
+    parts: list[str] = []
+
+    for key in preferred_order:
+        item = value.get(key)
+        if _has_value(item):
+            parts.append(f"{labels[key]} {item}")
+
+    for key, item in value.items():
+        if key not in preferred_order and _has_value(item):
+            parts.append(f"{key} {item}")
+
+    return " · ".join(parts)
+
+
+def _render_fact_value(key: str, value: Any) -> str:
+    if key == "dimensions":
+        return _render_dimensions(value)
+
+    if isinstance(value, dict):
+        parts = [
+            f"{sub_key}: {sub_value}"
+            for sub_key, sub_value in value.items()
+            if _has_value(sub_value)
+        ]
+        return " · ".join(parts)
+
+    if isinstance(value, (list, tuple, set)):
+        return " · ".join(str(item) for item in value if _has_value(item))
+
+    return str(value or "").strip()
+
+
 def _fact_summary(facts: dict[str, Any]) -> str | None:
+    """확정 FACT를 JSON 없이 고객이 읽을 수 있는 줄 단위 사양으로 만듭니다."""
     if not facts:
         return None
+
     labels = {
         "model_name": "모델명",
         "primary_material": "주재질",
         "secondary_material": "보조재질",
         "weight": "중량",
-        "dimensions": "사이즈",
+        "dimensions": "크기",
         "manufacturer": "제조사",
         "country_of_origin": "원산지",
         "certifications": "인증",
         "packaging": "포장",
-        "fact_notes": "추가 FACT",
+        "fact_notes": "추가 정보",
     }
+
     parts: list[str] = []
     for key, value in facts.items():
-        if isinstance(value, (dict, list)):
-            rendered = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
-        else:
-            rendered = str(value)
-        parts.append(f"{labels.get(key, key)}: {rendered}")
-    return " | ".join(parts)
+        rendered = _render_fact_value(key, value)
+        if rendered:
+            parts.append(f"{labels.get(key, key)}: {rendered}")
 
+    return "\n".join(parts) or None
+
+
+def _feature_fact_summary(summary: str | None) -> str | None:
+    """상세 사양 중 특징 섹션에 적합한 재질·기능 정보만 추립니다."""
+    if not summary:
+        return None
+
+    keywords = (
+        "주재질",
+        "보조재질",
+        "재질",
+        "바퀴",
+        "드레인",
+        "출수구",
+        "구조",
+        "기능",
+    )
+    lines = [line.strip() for line in summary.splitlines() if line.strip()]
+    selected = [line for line in lines if any(keyword in line for keyword in keywords)]
+    return "\n".join(selected[:5]) or None
 
 def enriched_product_snapshot(db: Session, *, tenant_id: str, product_id: str) -> dict:
     snapshot = _ORIGINAL_PRODUCT_SNAPSHOT(db, tenant_id=tenant_id, product_id=product_id)
@@ -138,6 +203,7 @@ def grounded_build_sections(
     tenant_id: str,
     product_id: str,
     strategy: str,
+    template=None,
 ) -> list[dict]:
     """Remove sample-product copy and bind sections to actual registered data."""
     rows = _ORIGINAL_BUILD_SECTIONS(
@@ -145,6 +211,7 @@ def grounded_build_sections(
         tenant_id=tenant_id,
         product_id=product_id,
         strategy=strategy,
+        template=template,
     )
     snapshot = enriched_product_snapshot(db, tenant_id=tenant_id, product_id=product_id)
     product = snapshot["product"]
@@ -159,6 +226,7 @@ def grounded_build_sections(
     features = _as_list(marketing.get("features"))
     selling_points = _as_list(marketing.get("selling_points"))
     summary = detail.get("specification") or _fact_summary(master_facts)
+    feature_summary = _feature_fact_summary(summary) or summary
 
     for row in rows:
         section_type = row.get("section_type")
@@ -175,7 +243,7 @@ def grounded_build_sections(
             content["body"] = detail.get("usage") or (" / ".join(usage) if usage else None)
             content["fact_sources"] = ["ProductDetail.usage", "ProductRegistrationProfile.operating_info"]
         elif section_type == "FEATURE":
-            content["product_specification"] = summary
+            content["product_specification"] = feature_summary
             content["usage"] = detail.get("usage") or usage
             content["features"] = features
             content["master_facts"] = master_facts

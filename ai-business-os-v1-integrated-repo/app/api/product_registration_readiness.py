@@ -60,19 +60,18 @@ def registration_readiness(
     missing: list[str] = []
     if not facts_confirmed:
         missing.append("기본 FACT 사용자 확정")
-    missing.extend(images.get("missing_labels") or [])
-    if images.get("ready") and not primary_asset_linked:
-        missing.append("대표 이미지 Product Master 연결")
+    if not primary_asset_linked:
+        missing.append("원본 이미지 최소 1개")
 
-    core_ready = facts_confirmed and bool(images.get("ready")) and primary_asset_linked
+    # Product registration stores source material only. Angle completeness and
+    # image-role planning are handled by the separate image asset generator.
+    core_ready = facts_confirmed and primary_asset_linked
     registration_missing: list[str] = []
     if not core_ready:
         registration_missing.extend(missing)
-    if not content_basis_saved:
-        registration_missing.append("텍스트 확장정보 사용자 확정")
-    if not image_plans_saved:
-        registration_missing.append("AI 이미지 기획 사용자 확정")
-    registration_flow_complete = core_ready and content_basis_saved and image_plans_saved
+    # Image role planning belongs to the separate image-asset generator.  It is
+    # useful downstream state, but it must not block Product Master registration.
+    registration_flow_complete = core_ready
 
     return {
         # `ready` remains the stable Product Master core gate used by downstream release policy.
@@ -81,7 +80,7 @@ def registration_readiness(
         "product_id": product.id,
         "product_status": product.status,
         "facts_confirmed": facts_confirmed,
-        "images_ready": bool(images.get("ready")),
+        "images_ready": primary_asset_linked,
         "primary_asset_linked": primary_asset_linked,
         "required_image_slots": images.get("required_slots") or [],
         "missing_image_slots": images.get("missing_slots") or [],
@@ -91,10 +90,10 @@ def registration_readiness(
         "image_plans_saved": image_plans_saved,
         "image_generation_required": False,
         "note": (
-            "상품등록 완료. 기본 Product Master와 확장 상품정보가 확정되었습니다. 실제 이미지 생성은 등록 완료 조건이 아닙니다."
+            "상품등록 완료. 객관적 FACT와 원본 자료가 저장되었습니다. 문안 작성과 이미지 활용 기획은 각각의 다음 도구에서 진행합니다."
             if registration_flow_complete
             else (
-                "Product Master 핵심 등록 완료. 텍스트 확장정보와 이미지 기획을 확정하면 상품등록 흐름이 완료됩니다."
+                "상품 FACT는 확인되었으며 원본 이미지를 최소 1개 등록하면 완료됩니다."
                 if core_ready
                 else "필수 FACT와 상품 이미지 FACT를 모두 확정해야 Product Master 핵심 등록이 완료됩니다."
             )
