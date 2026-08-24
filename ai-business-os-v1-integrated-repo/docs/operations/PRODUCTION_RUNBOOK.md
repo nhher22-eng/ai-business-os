@@ -12,6 +12,24 @@ Always enter the repository first:
 
     cd ~/ai-business-os/ai-business-os-v1-integrated-repo
 
+## 0. Start-of-Work Safety Check
+
+Install the stage-1 safety commands once after deployment:
+
+    ./scripts/install-ops-safety.sh
+
+Before code changes, deployment, migration, or recovery:
+
+    aios-preflight
+
+For a complete Korean diagnostic report:
+
+    aios-doctor
+
+Record the current branch and commit shown by the diagnostic. If it reports
+`작업 진행 가능 여부: 중단`, do not deploy, migrate, delete, or overwrite data.
+Follow `docs/operations/EMERGENCY_ONE_PAGE_KO.md`.
+
 ## 1. Service Status
 
     docker compose ps
