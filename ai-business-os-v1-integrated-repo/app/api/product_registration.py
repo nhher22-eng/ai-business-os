@@ -18,6 +18,7 @@ from app.db.product_registration import ProductRegistrationProfile, ProductSourc
 from app.db.session import SessionLocal
 from app.services.image_studio import ImageStudioError, media_root, resolve_media_uri, save_reference_upload
 from app.services.product_registration import build_ai_suggestions
+from app.services.commerce_codes import allocate_product_code, create_sku
 
 
 router = APIRouter(
@@ -56,9 +57,10 @@ class FactBody(BaseModel):
 
 class NewProductBody(FactBody):
     workspace_id: str
-    product_code: str = Field(min_length=1, max_length=128)
+    product_code: str | None = Field(default=None, max_length=128)
     name: str = Field(min_length=1, max_length=240)
     description: str | None = None
+    options: list[str] = Field(default_factory=list, max_length=100)
 
 
 class ApplySuggestionsBody(BaseModel):
@@ -208,10 +210,11 @@ def register_product(
     if workspace is None:
         raise HTTPException(404, detail="workspace not found")
 
+    product_code = (body.product_code or "").strip() or allocate_product_code(db, body.workspace_id)
     existing = db.scalar(
         select(Product).where(
             Product.workspace_id == body.workspace_id,
-            Product.product_code == body.product_code,
+            Product.product_code == product_code,
         )
     )
     if existing is not None:
@@ -220,13 +223,19 @@ def register_product(
     product = Product(
         tenant_id=tenant_id,
         workspace_id=body.workspace_id,
-        product_code=body.product_code,
+        product_code=product_code,
         name=body.name,
         status="draft",
         description=body.description,
     )
     db.add(product)
     db.flush()
+
+    options = list(dict.fromkeys(x.strip() for x in body.options if x.strip()))
+    if options:
+        skus = [create_sku(db, product=product, name=f"{body.name} {option}", option_value=option) for option in options]
+    else:
+        skus = [create_sku(db, product=product, name=f"{body.name} 기본")]
 
     row = ProductRegistrationProfile(
         tenant_id=tenant_id,
@@ -238,7 +247,13 @@ def register_product(
     db.commit()
     db.refresh(product)
     db.refresh(row)
-    return _profile_payload(row, product)
+    payload = _profile_payload(row, product)
+    payload["skus"] = [
+        {"id": sku.id, "sku_code": sku.sku_code, "name": sku.name,
+         "option_value": sku.option_value, "barcode": sku.barcode, "sales_unit": sku.sales_unit}
+        for sku in skus
+    ]
+    return payload
 
 
 @router.get("/products/{product_id}")

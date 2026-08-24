@@ -403,6 +403,8 @@ class ProductSKU(Base):
         String(120),
         nullable=True,
     )
+    barcode: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    sales_unit: Mapped[str] = mapped_column(String(32), default="each", nullable=False)
     status: Mapped[str] = mapped_column(
         String(32),
         default="active",
@@ -418,6 +420,45 @@ class ProductSKU(Base):
         default=utcnow,
         onupdate=utcnow,
         nullable=False,
+    )
+
+
+class CommerceCodeCounter(Base):
+    __tablename__ = "commerce_code_counters"
+
+    workspace_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("business_workspaces.id", ondelete="CASCADE"), primary_key=True
+    )
+    next_product_number: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
+    )
+
+
+class SalesChannelListing(Base):
+    __tablename__ = "sales_channel_listings"
+    __table_args__ = (
+        UniqueConstraint("sku_id", "channel", name="uq_channel_listing_sku_channel"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    product_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("products.id", ondelete="CASCADE"), nullable=False
+    )
+    sku_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("product_skus.id", ondelete="CASCADE"), nullable=False
+    )
+    channel: Mapped[str] = mapped_column(String(32), nullable=False)
+    external_product_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    external_sku_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="unlinked", nullable=False)
+    channel_product_name: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    channel_price: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
     )
 
 class ProductDetail(Base):

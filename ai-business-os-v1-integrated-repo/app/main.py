@@ -26,6 +26,8 @@ from app.api.product_operations import router as product_operations_router
 from app.api.content_copy import router as content_copy_router
 from app.api.image_asset_workflows import router as image_asset_workflows_router
 from app.api.google_drive import router as google_drive_router
+from app.api.commerce_catalog import router as commerce_catalog_router
+from app.commerce_catalog_ui import router as commerce_catalog_ui_router
 from app.google_drive_ui import router as google_drive_ui_router
 from app.dashboard_ui import router as dashboard_ui_router
 from app.operations_ui import router as operations_ui_router
@@ -106,6 +108,8 @@ app.include_router(product_operations_router)
 app.include_router(content_copy_router)
 app.include_router(image_asset_workflows_router)
 app.include_router(google_drive_router)
+app.include_router(commerce_catalog_router)
+app.include_router(commerce_catalog_ui_router)
 app.include_router(google_drive_ui_router)
 app.include_router(dashboard_session_router)
 app.include_router(operations_ui_router)

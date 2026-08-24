@@ -9,6 +9,7 @@ from app.api.dashboard_session import require_business_auth
 from app.db.models import Product, ProductSKU
 from app.db.product_operations import ProductChangeEvent
 from app.db.session import SessionLocal
+from app.services.commerce_codes import create_sku as create_automatic_sku
 
 
 router = APIRouter(
@@ -32,9 +33,11 @@ class ProductStatusBody(BaseModel):
 
 
 class SKUCreateBody(BaseModel):
-    sku_code: str = Field(min_length=1, max_length=128)
+    sku_code: str | None = Field(default=None, max_length=128)
     name: str = Field(min_length=1, max_length=200)
     option_value: str | None = Field(default=None, max_length=120)
+    barcode: str | None = Field(default=None, max_length=64)
+    sales_unit: str = Field(default="each", pattern="^(each|box|set)$")
     status: str = Field(default="active", pattern="^(active|inactive)$")
     changed_by: str | None = None
 
@@ -43,6 +46,8 @@ class SKUUpdateBody(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     option_value: str | None = Field(default=None, max_length=120)
     status: str | None = Field(default=None, pattern="^(active|inactive)$")
+    barcode: str | None = Field(default=None, max_length=64)
+    sales_unit: str | None = Field(default=None, pattern="^(each|box|set)$")
     changed_by: str | None = None
 
 
@@ -61,6 +66,8 @@ def _sku_payload(row: ProductSKU) -> dict:
         "sku_code": row.sku_code,
         "name": row.name,
         "option_value": row.option_value,
+        "barcode": row.barcode,
+        "sales_unit": row.sales_unit,
         "status": row.status,
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
@@ -150,25 +157,27 @@ def create_sku(
             ProductSKU.product_id == product_id,
             ProductSKU.sku_code == body.sku_code,
         )
-    )
+    ) if body.sku_code else None
     if existing is not None:
         raise HTTPException(409, detail="sku already exists")
-    row = ProductSKU(
-        tenant_id=tenant_id,
-        product_id=product_id,
-        sku_code=body.sku_code,
-        name=body.name,
-        option_value=body.option_value,
-        status=body.status,
-    )
-    db.add(row)
-    db.flush()
+    product = _product(db, tenant_id, product_id)
+    if body.sku_code:
+        row = ProductSKU(tenant_id=tenant_id, product_id=product_id, sku_code=body.sku_code,
+                         name=body.name, option_value=body.option_value, barcode=body.barcode,
+                         sales_unit=body.sales_unit, status=body.status)
+        db.add(row)
+        db.flush()
+    else:
+        row = create_automatic_sku(db, product=product, name=body.name,
+                                   option_value=body.option_value, barcode=body.barcode,
+                                   sales_unit=body.sales_unit)
+        row.status = body.status
     _event(
         db,
         tenant_id=tenant_id,
         product_id=product_id,
         event_type="sku_created",
-        summary=f"SKU 추가: {body.sku_code}",
+        summary=f"SKU 추가: {row.sku_code}",
         payload=_sku_payload(row),
         changed_by=body.changed_by,
     )
@@ -202,6 +211,10 @@ def update_sku(
         row.option_value = body.option_value or None
     if body.status is not None:
         row.status = body.status
+    if body.barcode is not None:
+        row.barcode = body.barcode or None
+    if body.sales_unit is not None:
+        row.sales_unit = body.sales_unit
     after = _sku_payload(row)
     if before != after:
         _event(
