@@ -14,7 +14,7 @@ def test_image_asset_v4_route_and_four_stage_contract():
     for label in ("1 원본 확인", "2 요소 설정", "3 제작·예산", "4 통합 검토·승인"):
         assert label in text
     assert "FACT 기반 제작 실행" not in text
-    assert "전체 승인·이미지 요소 자산 저장" in text
+    assert "제작계획 최종 승인·실행" in text
 
 
 def test_dec_084_element_names_order_and_modes():
@@ -47,4 +47,3 @@ def test_product_sources_budget_review_and_per_product_approval_are_connected():
         'href="/business-home"',
     ):
         assert marker in text
-
