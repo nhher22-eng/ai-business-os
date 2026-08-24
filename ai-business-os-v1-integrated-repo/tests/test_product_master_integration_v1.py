@@ -5,6 +5,8 @@ from app.services.product_master_integration_patch import (
     enhanced_fact_readiness,
 )
 from app.services.product_registration_safety_patch import apply_only_supplied_facts
+from app import product_registration_ui
+from app.product_registration_resume_ui_patch import inject_product_registration_resume
 
 
 def test_only_confirmed_master_facts_are_exposed():
@@ -58,3 +60,11 @@ def test_confirmed_master_fact_can_satisfy_detail_page_readiness():
     assert result["ready"] is True
     assert result["has_master_fact"] is True
     assert "product_detail_or_sku" not in result["missing"]
+
+
+def test_product_master_registration_ui_keeps_resume_patch_compatible():
+    patched = inject_product_registration_resume(product_registration_ui.HTML)
+    assert "resumeExistingProduct" in patched
+    assert "if(!v('name'))" in patched
+    assert "d.product.product_code" in patched
+    assert "openNextSteps()" in patched
