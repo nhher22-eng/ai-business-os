@@ -43,6 +43,8 @@ SAVE_EXISTING = r'''async function saveExistingFacts(){const s=document.getEleme
 
 SAVE_GUARD_OLD = "async function saveFacts(){const s=document.getElementById('factStatus');try{if(!v('name')||!v('productCode'))throw new Error('품명과 상품코드는 필수입니다.');"
 SAVE_GUARD_NEW = "async function saveFacts(){const s=document.getElementById('factStatus');try{if(productId&&new URLSearchParams(location.search).get('product_id')){await saveExistingFacts();return}if(!v('name')||!v('productCode'))throw new Error('품명과 상품코드는 필수입니다.');"
+SAVE_GUARD_CATALOG_OLD = "async function saveFacts(){const s=document.getElementById('factStatus');try{if(!v('name'))throw new Error('품명은 필수입니다.');"
+SAVE_GUARD_CATALOG_NEW = "async function saveFacts(){const s=document.getElementById('factStatus');try{if(productId&&new URLSearchParams(location.search).get('product_id')){await saveExistingFacts();return}if(!v('name'))throw new Error('품명은 필수입니다.');"
 
 
 def inject_product_management_mode(html: str) -> str:
@@ -51,9 +53,12 @@ def inject_product_management_mode(html: str) -> str:
     if INIT_OLD not in html:
         raise RuntimeError('product registration init marker not found')
     html = html.replace(INIT_OLD, INIT_NEW, 1)
-    if SAVE_GUARD_OLD not in html:
+    if SAVE_GUARD_CATALOG_OLD in html:
+        html = html.replace(SAVE_GUARD_CATALOG_OLD, SAVE_GUARD_CATALOG_NEW, 1)
+    elif SAVE_GUARD_OLD in html:
+        html = html.replace(SAVE_GUARD_OLD, SAVE_GUARD_NEW, 1)
+    else:
         raise RuntimeError('product registration save guard marker not found')
-    html = html.replace(SAVE_GUARD_OLD, SAVE_GUARD_NEW, 1)
     if SAVE_MARKER not in html:
         raise RuntimeError('product registration save marker not found')
     return html.replace(SAVE_MARKER, SAVE_EXISTING + '\n' + SAVE_MARKER, 1)

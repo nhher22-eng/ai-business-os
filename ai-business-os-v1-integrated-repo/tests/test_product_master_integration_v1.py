@@ -7,6 +7,7 @@ from app.services.product_master_integration_patch import (
 from app.services.product_registration_safety_patch import apply_only_supplied_facts
 from app import product_registration_ui
 from app.product_registration_resume_ui_patch import inject_product_registration_resume
+from app.product_management_ui_patch import inject_product_management_mode
 
 
 def test_only_confirmed_master_facts_are_exposed():
@@ -68,3 +69,8 @@ def test_product_master_registration_ui_keeps_resume_patch_compatible():
     assert "if(!v('name'))" in patched
     assert "d.product.product_code" in patched
     assert "openNextSteps()" in patched
+
+    managed = inject_product_management_mode(patched)
+    assert "loadExistingProductFromUrl" in managed
+    assert "await saveExistingFacts();return" in managed
+    assert "if(!v('name'))" in managed
