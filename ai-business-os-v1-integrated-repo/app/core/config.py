@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     image_preview_estimated_cost_micros: int = 0
     image_final_estimated_cost_micros: int = 0
 
+    google_drive_client_id: str = ""
+    google_drive_client_secret: str = ""
+    google_drive_redirect_uri: str = "https://os.gardenfarm.kr/api/v1/integrations/google-drive/callback"
+    google_drive_root_folder_id: str = ""
+    google_picker_api_key: str = ""
+    google_picker_app_id: str = ""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore",
