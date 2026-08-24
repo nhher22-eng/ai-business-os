@@ -19,7 +19,7 @@ def test_image_asset_ui_contains_dec085_flow():
     assert "제작계획 최종 승인·실행" in html
     assert "원본 다시 선택" in html
     assert "원본 추가 등록" in html
-    assert "registeredRows.length?registeredRows:factRows" in html
+    assert "[...registeredRows,...factRows]" in html
     assert "전체 합계" in html
     assert "element-mini" in html
     assert "제작 승인 대상" in html
