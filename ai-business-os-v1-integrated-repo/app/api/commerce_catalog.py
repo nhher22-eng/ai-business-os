@@ -30,6 +30,11 @@ class ChannelListingBody(BaseModel):
     channel_price: int | None = Field(default=None, ge=0)
 
 
+class DeleteProductBody(BaseModel):
+    confirm_product_code: str = Field(min_length=1, max_length=128)
+    delete_linked_skus: bool = False
+
+
 def _listing_payload(row: SalesChannelListing) -> dict:
     return {"id": row.id, "channel": row.channel, "external_product_id": row.external_product_id,
             "external_sku_id": row.external_sku_id, "status": row.status,
@@ -65,6 +70,41 @@ def catalog_rows(workspace_id: str = Query(...), tenant_id: str = Query(...), db
                   "channels": [_listing_payload(x) for x in by_sku.get(s.id, [])]}
                  for s in by_product.get(p.id, [])]
     } for p in products]
+
+
+@router.delete("/products/{product_id}")
+def delete_product(product_id: str, body: DeleteProductBody,
+                   tenant_id: str = Query(...), db: Session = Depends(get_db)):
+    product = db.scalar(select(Product).where(
+        Product.id == product_id, Product.tenant_id == tenant_id
+    ))
+    if product is None:
+        raise HTTPException(404, detail="product not found")
+    if body.confirm_product_code != product.product_code:
+        raise HTTPException(409, detail="상품코드 확인값이 일치하지 않습니다.")
+
+    sku_ids = list(db.scalars(select(ProductSKU.id).where(
+        ProductSKU.tenant_id == tenant_id, ProductSKU.product_id == product.id
+    )).all())
+    if sku_ids and not body.delete_linked_skus:
+        raise HTTPException(
+            409,
+            detail=f"연결된 SKU {len(sku_ids)}개 삭제 확인이 필요합니다.",
+        )
+    listing_count = len(db.scalars(select(SalesChannelListing.id).where(
+        SalesChannelListing.tenant_id == tenant_id,
+        SalesChannelListing.product_id == product.id,
+    )).all())
+    deleted = {
+        "id": product.id,
+        "product_code": product.product_code,
+        "name": product.name,
+        "deleted_skus": len(sku_ids),
+        "deleted_channel_listings": listing_count,
+    }
+    db.delete(product)
+    db.commit()
+    return deleted
 
 
 @router.put("/skus/{sku_id}/channels/{channel}")
