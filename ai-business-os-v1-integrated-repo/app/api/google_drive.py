@@ -40,7 +40,7 @@ def connect(tenant_id: str = Query(..., min_length=1, max_length=128)):
     configured()
     state = secrets.token_urlsafe(32)
     redis.Redis.from_url(settings.redis_url).setex(
-        f"google-drive-oauth:{state}", 600, json.dumps({"tenant_id": tenant_id})
+        f"google-drive-oauth:{state}", 1800, json.dumps({"tenant_id": tenant_id})
     )
     return {"authorization_url": drive.authorization_url(state)}
 
@@ -49,11 +49,13 @@ def connect(tenant_id: str = Query(..., min_length=1, max_length=128)):
 def callback(code: str, state: str, db: Session = Depends(get_db)):
     configured()
     client = redis.Redis.from_url(settings.redis_url)
-    raw = client.getdel(f"google-drive-oauth:{state}")
+    state_key = f"google-drive-oauth:{state}"
+    raw = client.get(state_key)
     if not raw:
         raise HTTPException(400, "OAuth state expired or invalid")
     tenant_id = json.loads(raw)["tenant_id"]
     tokens = drive.exchange_code(code)
+    client.delete(state_key)
     row = db.scalar(select(GoogleDriveConnection).where(GoogleDriveConnection.tenant_id == tenant_id))
     if row is None:
         row = GoogleDriveConnection(tenant_id=tenant_id, root_folder_id="", folder_map={})
