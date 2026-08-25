@@ -36,6 +36,11 @@ async function addSku(){const name=prompt('새 SKU 이름을 입력하세요.');
 async function saveChannel(skuId,c,p){try{await request(`/api/v1/commerce-catalog/skus/${skuId}/channels/${c}?tenant_id=${tenant}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({channel:c,status:val(p+'status'),external_product_id:clean(val(p+'product')),external_sku_id:clean(val(p+'sku')),channel_product_name:clean(val(p+'name')),channel_price:number(val(p+'price'))})});$(p+'msg').innerHTML='<span class="ok">저장 완료</span>'}catch(e){$(p+'msg').textContent=String(e)}}init();
 </script></body></html>'''
 
+from app.product_detail_v2_ui import DETAIL_HTML_V2
+
+DETAIL_HTML = DETAIL_HTML_V2
+
+
 @router.get("/commerce-catalog", response_class=HTMLResponse, include_in_schema=False)
 def commerce_catalog_page():
     return HTMLResponse(HTML, headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})

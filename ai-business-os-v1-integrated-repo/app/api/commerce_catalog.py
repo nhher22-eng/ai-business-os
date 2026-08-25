@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dashboard_session import require_business_auth
 from app.db.models import Product, ProductSKU, SalesChannelListing
+from app.db.product_registration import ProductRegistrationProfile
 from app.db.session import SessionLocal
 from app.services.commerce_codes import create_sku as create_commerce_sku
 
@@ -64,6 +65,30 @@ class SKUManagementBody(BaseModel):
     storage_location: str | None = Field(default=None, max_length=160)
 
 
+class ProductNarrativeBody(BaseModel):
+    features: list[str] = Field(default_factory=list, max_length=30)
+    advantages: list[str] = Field(default_factory=list, max_length=30)
+    limitations: list[str] = Field(default_factory=list, max_length=30)
+    recommended_uses: list[str] = Field(default_factory=list, max_length=30)
+    cautions: list[str] = Field(default_factory=list, max_length=30)
+
+
+class SKUDetailUpdate(SKUManagementBody):
+    id: str = Field(min_length=1, max_length=36)
+
+
+class ChannelDetailUpdate(ChannelListingBody):
+    sku_id: str = Field(min_length=1, max_length=36)
+
+
+class ProductDetailSaveBody(BaseModel):
+    product: ProductMasterBody
+    narrative: ProductNarrativeBody = Field(default_factory=ProductNarrativeBody)
+    skus: list[SKUDetailUpdate] = Field(default_factory=list, max_length=200)
+    channels: list[ChannelDetailUpdate] = Field(default_factory=list, max_length=600)
+    changed_by: str = Field(default="dashboard-user", min_length=1, max_length=128)
+
+
 def _listing_payload(row: SalesChannelListing) -> dict:
     return {"id": row.id, "channel": row.channel, "external_product_id": row.external_product_id,
             "external_sku_id": row.external_sku_id, "status": row.status,
@@ -73,6 +98,24 @@ def _listing_payload(row: SalesChannelListing) -> dict:
 
 def _clean(value: str | None) -> str | None:
     return value.strip() or None if value is not None else None
+
+
+def _clean_list(values: list[str]) -> list[str]:
+    return [cleaned for value in values if (cleaned := value.strip())]
+
+
+def _narrative_payload(profile: ProductRegistrationProfile | None) -> dict:
+    operating = profile.operating_info or {} if profile else {}
+    marketing = profile.marketing_info or {} if profile else {}
+    return {
+        "features": marketing.get("features") or [],
+        "advantages": marketing.get("selling_points") or [],
+        "limitations": marketing.get("limitations") or [],
+        "recommended_uses": operating.get("usage") or [],
+        "cautions": marketing.get("product_notes") or [],
+        "facts_confirmed": bool(profile and profile.facts_confirmed),
+        "ai_suggestions": profile.ai_suggestions or {} if profile else {},
+    }
 
 
 def _sku_payload(row: ProductSKU, channels: list[SalesChannelListing]) -> dict:
@@ -140,6 +183,10 @@ def product_management_detail(product_id: str, tenant_id: str = Query(...),
     by_sku: dict[str, list[SalesChannelListing]] = {}
     for listing in listings:
         by_sku.setdefault(listing.sku_id, []).append(listing)
+    profile = db.scalar(select(ProductRegistrationProfile).where(
+        ProductRegistrationProfile.tenant_id == tenant_id,
+        ProductRegistrationProfile.product_id == product.id,
+    ))
     return {
         "id": product.id, "product_code": product.product_code, "name": product.name,
         "status": product.status, "description": product.description,
@@ -149,7 +196,111 @@ def product_management_detail(product_id: str, tenant_id: str = Query(...),
         "supplier_name": product.supplier_name,
         "created_at": product.created_at.isoformat(),
         "updated_at": product.updated_at.isoformat(),
+        "narrative": _narrative_payload(profile),
         "skus": [_sku_payload(s, by_sku.get(s.id, [])) for s in skus],
+    }
+
+
+@router.put("/products/{product_id}/detail")
+def save_product_detail(product_id: str, body: ProductDetailSaveBody,
+                        tenant_id: str = Query(...), db: Session = Depends(get_db)):
+    """Validate first, then save the internal product detail as one transaction.
+
+    External channel publication is intentionally excluded. Channel rows here
+    are internal preparation records and remain subject to the existing approval
+    boundary before any marketplace write.
+    """
+    product = db.scalar(select(Product).where(
+        Product.id == product_id, Product.tenant_id == tenant_id
+    ))
+    if product is None:
+        raise HTTPException(404, detail="product not found")
+
+    sku_rows = db.scalars(select(ProductSKU).where(
+        ProductSKU.tenant_id == tenant_id,
+        ProductSKU.product_id == product.id,
+    )).all()
+    by_id = {row.id: row for row in sku_rows}
+    unknown = [item.id for item in body.skus if item.id not in by_id]
+    channel_unknown = [item.sku_id for item in body.channels if item.sku_id not in by_id]
+    if unknown or channel_unknown:
+        raise HTTPException(409, detail={
+            "message": "상품에 속하지 않는 SKU 변경이 포함되어 있습니다.",
+            "sku_ids": sorted(set(unknown + channel_unknown)),
+        })
+
+    product.name = body.product.name.strip()
+    product.status = body.product.status
+    product.description = _clean(body.product.description)
+    for field in (
+        "category", "brand", "model_name", "manufacturer",
+        "country_of_origin", "supplier_name",
+    ):
+        setattr(product, field, _clean(getattr(body.product, field)))
+
+    for item in body.skus:
+        sku = by_id[item.id]
+        for field in (
+            "name", "option_value", "barcode", "sales_unit", "status",
+            "purchase_cost", "list_price", "sale_price", "current_stock",
+            "available_stock", "safety_stock", "incoming_stock", "storage_location",
+        ):
+            value = getattr(item, field)
+            if field == "name":
+                value = value.strip()
+            elif field in {"option_value", "barcode", "storage_location"}:
+                value = _clean(value)
+            setattr(sku, field, value)
+
+    profile = db.scalar(select(ProductRegistrationProfile).where(
+        ProductRegistrationProfile.tenant_id == tenant_id,
+        ProductRegistrationProfile.product_id == product.id,
+    ))
+    if profile is None:
+        profile = ProductRegistrationProfile(tenant_id=tenant_id, product_id=product.id)
+        db.add(profile)
+    operating = dict(profile.operating_info or {})
+    marketing = dict(profile.marketing_info or {})
+    operating["usage"] = _clean_list(body.narrative.recommended_uses)
+    marketing.update({
+        "features": _clean_list(body.narrative.features),
+        "selling_points": _clean_list(body.narrative.advantages),
+        "limitations": _clean_list(body.narrative.limitations),
+        "product_notes": _clean_list(body.narrative.cautions),
+    })
+    profile.operating_info = operating
+    profile.marketing_info = marketing
+
+    for item in body.channels:
+        row = db.scalar(select(SalesChannelListing).where(
+            SalesChannelListing.tenant_id == tenant_id,
+            SalesChannelListing.sku_id == item.sku_id,
+            SalesChannelListing.channel == item.channel,
+        ))
+        if row is None:
+            row = SalesChannelListing(
+                tenant_id=tenant_id, product_id=product.id,
+                sku_id=item.sku_id, channel=item.channel,
+            )
+            db.add(row)
+        row.external_product_id = _clean(item.external_product_id)
+        row.external_sku_id = _clean(item.external_sku_id)
+        row.status = item.status
+        row.channel_product_name = _clean(item.channel_product_name)
+        row.channel_price = item.channel_price
+        row.last_synced_at = datetime.now(timezone.utc)
+
+    db.commit()
+    return {
+        "id": product.id,
+        "product_code": product.product_code,
+        "saved": {
+            "product": 1, "narrative": 1,
+            "skus": len(body.skus), "channels": len(body.channels),
+        },
+        "external_actions_executed": False,
+        "approval_required": any(item.status in {"pending", "active"} for item in body.channels),
+        "changed_by": body.changed_by,
     }
 
 
