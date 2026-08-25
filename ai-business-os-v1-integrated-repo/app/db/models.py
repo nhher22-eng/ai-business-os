@@ -350,6 +350,12 @@ class Product(Base):
         Text,
         nullable=True,
     )
+    category: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    brand: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    model_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    manufacturer: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    country_of_origin: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    supplier_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     image_nonlocked_allowed: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -405,6 +411,14 @@ class ProductSKU(Base):
     )
     barcode: Mapped[str | None] = mapped_column(String(64), nullable=True)
     sales_unit: Mapped[str] = mapped_column(String(32), default="each", nullable=False)
+    purchase_cost: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    list_price: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sale_price: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    current_stock: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    available_stock: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    safety_stock: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    incoming_stock: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    storage_location: Mapped[str | None] = mapped_column(String(160), nullable=True)
     status: Mapped[str] = mapped_column(
         String(32),
         default="active",

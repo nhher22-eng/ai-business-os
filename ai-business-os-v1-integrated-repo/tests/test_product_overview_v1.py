@@ -16,13 +16,14 @@ def test_product_overview_has_management_links_and_status_columns():
     assert '/product-registration?product_id=' in OVERVIEW_HTML
     assert '/detail-pages?product_id=' in OVERVIEW_HTML
     assert '/detail-page-studio' not in OVERVIEW_HTML
-    assert '＋ 새 상품 등록' in OVERVIEW_HTML
+    assert '＋ 신규 상품 등록' in OVERVIEW_HTML
 
 
 def test_dashboard_product_overview_link_is_idempotent():
     once = inject_product_overview_link(dashboard_ui.HTML)
     twice = inject_product_overview_link(once)
     assert 'href="/products"' in once
+    assert 'href="/commerce-catalog"' in once
     assert once == twice
 
 

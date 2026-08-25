@@ -11,10 +11,10 @@ def test_completed_product_master_offers_registration_next_work_actions_without_
 
     assert 'id="nextDetailPage"' in html
     assert 'id="nextImageStudio"' not in html
-    assert 'href="/products"' in html
+    assert 'href="/commerce-catalog"' in html
     assert '>상세페이지 만들기<' in html
     assert '>AI 이미지 생성<' not in html
-    assert '>전체 상품<' in html
+    assert '>상품관리 센터<' in html
     assert '`/detail-pages?product_id=${encodeURIComponent(productId)}`' in html
     assert '`/image-studio?product_id=${encodeURIComponent(productId)}`' not in html
     assert "setRegistrationNextActions();" in html

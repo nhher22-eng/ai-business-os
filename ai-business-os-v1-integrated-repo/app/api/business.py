@@ -2,12 +2,13 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.dashboard_session import require_business_auth
 from app.db.models import BusinessWorkspace, Product, ProductSKU, ProductDetail, ProductComponent
 from app.db.session import SessionLocal
+from app.services.commerce_codes import normalize_product_code
 
 
 router = APIRouter(
@@ -151,10 +152,15 @@ def create_product(
     if workspace is None:
         raise HTTPException(status_code=404, detail="workspace not found")
 
+    try:
+        product_code = normalize_product_code(body.product_code)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     existing = db.scalar(
         select(Product).where(
             Product.workspace_id == body.workspace_id,
-            Product.product_code == body.product_code,
+            func.lower(Product.product_code) == product_code.lower(),
         )
     )
     if existing is not None:
@@ -163,7 +169,7 @@ def create_product(
     row = Product(
         tenant_id=tenant_id,
         workspace_id=body.workspace_id,
-        product_code=body.product_code,
+        product_code=product_code,
         name=body.name,
         status=body.status,
         sales_channel=body.sales_channel,

@@ -1,7 +1,19 @@
+import re
+
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.db.models import CommerceCodeCounter, Product, ProductSKU
+
+
+PRODUCT_CODE_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9._-]*$")
+
+
+def normalize_product_code(value: str) -> str:
+    code = value.strip().upper()
+    if not code or not PRODUCT_CODE_PATTERN.fullmatch(code):
+        raise ValueError("상품코드는 영문·숫자·점·밑줄·하이픈만 사용할 수 있습니다.")
+    return code
 
 
 def allocate_product_code(db: Session, workspace_id: str) -> str:

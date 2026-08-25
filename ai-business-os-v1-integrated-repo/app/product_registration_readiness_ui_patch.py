@@ -93,7 +93,7 @@ def inject_product_registration_readiness_ui(html: str) -> str:
     old_done_actions = '<div class="actions"><a href="/dashboard" class="secondary" style="padding:11px 16px;border-radius:10px">대시보드로 돌아가기</a></div>'
     new_done_actions = '''<div class="actions">
       <a id="nextDetailPage" href="/detail-pages" class="secondary" style="padding:11px 16px;border-radius:10px">상세페이지 만들기</a>
-      <a href="/products" class="secondary" style="padding:11px 16px;border-radius:10px">전체 상품</a>
+      <a href="/commerce-catalog" class="secondary" style="padding:11px 16px;border-radius:10px">상품관리 센터</a>
       <a href="/dashboard" class="secondary" style="padding:11px 16px;border-radius:10px">대시보드</a>
     </div>'''
     if old_done_actions in html:

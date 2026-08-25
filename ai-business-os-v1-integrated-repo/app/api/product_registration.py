@@ -9,7 +9,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.dashboard_session import require_business_auth
@@ -18,7 +18,7 @@ from app.db.product_registration import ProductRegistrationProfile, ProductSourc
 from app.db.session import SessionLocal
 from app.services.image_studio import ImageStudioError, media_root, resolve_media_uri, save_reference_upload
 from app.services.product_registration import build_ai_suggestions
-from app.services.commerce_codes import allocate_product_code, create_sku
+from app.services.commerce_codes import allocate_product_code, create_sku, normalize_product_code
 
 
 router = APIRouter(
@@ -210,11 +210,18 @@ def register_product(
     if workspace is None:
         raise HTTPException(404, detail="workspace not found")
 
-    product_code = (body.product_code or "").strip() or allocate_product_code(db, body.workspace_id)
+    try:
+        product_code = (
+            normalize_product_code(body.product_code)
+            if (body.product_code or "").strip()
+            else allocate_product_code(db, body.workspace_id)
+        )
+    except ValueError as exc:
+        raise HTTPException(422, detail=str(exc)) from exc
     existing = db.scalar(
         select(Product).where(
             Product.workspace_id == body.workspace_id,
-            Product.product_code == product_code,
+            func.lower(Product.product_code) == product_code.lower(),
         )
     )
     if existing is not None:
