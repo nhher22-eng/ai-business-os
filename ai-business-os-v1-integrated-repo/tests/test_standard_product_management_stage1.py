@@ -72,6 +72,8 @@ def test_management_center_separates_new_registration_and_existing_edit():
     assert "/commerce-catalog/product/${p.id}" in HTML
     assert "상품 상세·수정" in DETAIL_HTML
     assert "변경사항 저장" in DETAIL_HTML
+    assert "$('name').value=product.name" in DETAIL_HTML
+    assert "name.value=product.name" not in DETAIL_HTML
 
 
 def test_stage_one_sections_and_scope_are_visible():
