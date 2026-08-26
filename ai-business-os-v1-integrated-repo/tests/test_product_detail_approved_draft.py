@@ -5,6 +5,7 @@ from app.api.commerce_catalog import (
     ProductMasterBody,
     ProductNarrativeBody,
     SKUDetailUpdate,
+    _registration_review,
     save_product_detail,
 )
 from app.commerce_catalog_ui import DETAIL_HTML
@@ -21,6 +22,31 @@ def test_approved_detail_ui_has_six_areas_and_shared_execution_controls():
         assert marker in DETAIL_HTML
     assert "/products/${product.id}/detail" in DETAIL_HTML
     assert "외부 반영은 별도 승인 필요" in DETAIL_HTML
+    assert "/readiness-review?tenant_id=${tenant}" in DETAIL_HTML
+    assert "등록 준비 점검 · REVIEW" in DETAIL_HTML
+    assert ".slot-body .secondary{display:inline-flex;margin-top:10px}" in DETAIL_HTML
+
+
+def test_registration_review_reports_real_missing_work_without_external_action():
+    skus = [ProductSKU(
+        id="s1", tenant_id="t1", product_id="p1", sku_code="P1-01",
+        name="10m", status="active", sales_unit="each", sale_price=None,
+        current_stock=0, available_stock=0, safety_stock=0, incoming_stock=0,
+    )]
+
+    result = _registration_review(
+        skus=skus,
+        listings=[],
+        image_readiness={"missing_slots": ["FRONT"]},
+        detail_page_ready=False,
+    )
+
+    assert result["status"] == "REVIEW"
+    assert result["missing_labels"] == [
+        "정면 원본 이미지", "SKU 판매가", "배송조건", "판매콘텐츠", "판매채널",
+    ]
+    assert result["external_actions_executed"] is False
+    assert result["approval_required_before_external_execution"] is True
 
 
 def test_detail_batch_save_updates_product_narrative_and_skus_once():

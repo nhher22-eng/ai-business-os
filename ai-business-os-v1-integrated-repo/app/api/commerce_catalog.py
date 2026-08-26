@@ -6,10 +6,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.dashboard_session import require_business_auth
-from app.db.models import Product, ProductSKU, SalesChannelListing
+from app.db.models import DetailPageJob, Product, ProductSKU, SalesChannelListing
 from app.db.product_registration import ProductRegistrationProfile
 from app.db.session import SessionLocal
 from app.services.commerce_codes import create_sku as create_commerce_sku
+from app.services.product_image_fact import readiness as image_fact_readiness
 
 router = APIRouter(prefix="/api/v1/commerce-catalog", tags=["commerce-catalog"],
                    dependencies=[Depends(require_business_auth)])
@@ -137,6 +138,40 @@ def _sku_payload(row: ProductSKU, channels: list[SalesChannelListing]) -> dict:
     }
 
 
+def _registration_review(*, skus: list[ProductSKU],
+                         listings: list[SalesChannelListing],
+                         image_readiness: dict,
+                         detail_page_ready: bool) -> dict:
+    checks = [
+        {"code": "front_image", "label": "정면 원본 이미지",
+         "ready": "FRONT" not in (image_readiness.get("missing_slots") or []),
+         "next_action": "등록 자료에서 정면 원본 이미지를 등록·확정하세요."},
+        {"code": "sku_price", "label": "SKU 판매가",
+         "ready": bool(skus) and all(sku.sale_price is not None for sku in skus),
+         "next_action": "가격·재고·배송에서 모든 SKU의 현재 판매가를 입력하세요."},
+        {"code": "shipping", "label": "배송조건", "ready": False,
+         "next_action": "상품별 배송설정 기능이 연결된 뒤 배송조건을 지정하세요."},
+        {"code": "selling_content", "label": "판매콘텐츠",
+         "ready": detail_page_ready,
+         "next_action": "판매콘텐츠에서 승인된 상세페이지를 준비하세요."},
+        {"code": "sales_channel", "label": "판매채널",
+         "ready": any(row.status in {"linked", "pending", "active"}
+                      and bool(row.external_product_id) for row in listings),
+         "next_action": "판매채널에서 최소 한 채널의 상품번호를 연결하세요."},
+    ]
+    missing = [check for check in checks if not check["ready"]]
+    return {
+        "status": "PASS" if not missing else "REVIEW",
+        "ready": not missing,
+        "checks": checks,
+        "missing_count": len(missing),
+        "missing_labels": [check["label"] for check in missing],
+        "next_actions": [check["next_action"] for check in missing],
+        "external_actions_executed": False,
+        "approval_required_before_external_execution": True,
+    }
+
+
 @router.get("/rows")
 def catalog_rows(workspace_id: str = Query(...), tenant_id: str = Query(...), db: Session = Depends(get_db)):
     products = db.scalars(select(Product).where(
@@ -199,6 +234,37 @@ def product_management_detail(product_id: str, tenant_id: str = Query(...),
         "narrative": _narrative_payload(profile),
         "skus": [_sku_payload(s, by_sku.get(s.id, [])) for s in skus],
     }
+
+
+@router.get("/products/{product_id}/readiness-review")
+def product_registration_review(product_id: str, tenant_id: str = Query(...),
+                                db: Session = Depends(get_db)):
+    product = db.scalar(select(Product).where(
+        Product.id == product_id, Product.tenant_id == tenant_id
+    ))
+    if product is None:
+        raise HTTPException(404, detail="product not found")
+    skus = list(db.scalars(select(ProductSKU).where(
+        ProductSKU.tenant_id == tenant_id,
+        ProductSKU.product_id == product.id,
+    )).all())
+    listings = list(db.scalars(select(SalesChannelListing).where(
+        SalesChannelListing.tenant_id == tenant_id,
+        SalesChannelListing.product_id == product.id,
+    )).all())
+    detail_page_ready = db.scalar(select(DetailPageJob.id).where(
+        DetailPageJob.tenant_id == tenant_id,
+        DetailPageJob.product_id == product.id,
+        DetailPageJob.approved_version_no.is_not(None),
+    )) is not None
+    return _registration_review(
+        skus=skus,
+        listings=listings,
+        image_readiness=image_fact_readiness(
+            db, tenant_id=tenant_id, product_id=product.id
+        ),
+        detail_page_ready=detail_page_ready,
+    )
 
 
 @router.put("/products/{product_id}/detail")
