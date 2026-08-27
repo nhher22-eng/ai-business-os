@@ -22,18 +22,14 @@ def test_new_front_tool_routes_are_real_pages_and_legacy_generator_is_preserved(
 def test_product_registration_uses_new_common_front_navigation():
     response = client.get("/product-registration")
     assert response.status_code == 200
-    assert "공통 제작도구" in response.text
-    assert "원본 이미지 FACT" in response.text
-    assert 'href="/image-assets"' in response.text
     for label in (
-        "상품 식별정보",
-        "객관적 상품 FACT",
-        "옵션·규격·구성품",
-        "원본 자료 등록",
-        "FACT 확인·완료",
+        "기본정보",
+        "SKU 초기 구성",
+        "준비된 원본 자료",
+        "상품 생성 후 통합관리로 이동",
     ):
         assert label in response.text
-    assert "판매 문안·이미지 활용계획·AI 제안은 상품정보에 포함하지 않음" in response.text
+    assert "나머지는 통합상품관리에서 완성" in response.text
 
 
 def test_front_tools_use_existing_legacy_tenant_data():

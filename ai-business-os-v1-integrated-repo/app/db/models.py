@@ -419,6 +419,7 @@ class ProductSKU(Base):
     safety_stock: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     incoming_stock: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     storage_location: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    shipping_fee: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(
         String(32),
         default="active",

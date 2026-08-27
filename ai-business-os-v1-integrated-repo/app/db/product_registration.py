@@ -60,6 +60,9 @@ class ProductRegistrationProfile(Base):
     # Reuse ImageReferenceAsset rows; only IDs and display role live here.
     primary_image_asset_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     additional_image_asset_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    hero_image_asset_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    right45_image_asset_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    front_image_asset_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False

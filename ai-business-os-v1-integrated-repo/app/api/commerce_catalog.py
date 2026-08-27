@@ -64,6 +64,7 @@ class SKUManagementBody(BaseModel):
     safety_stock: int = Field(default=0, ge=0)
     incoming_stock: int = Field(default=0, ge=0)
     storage_location: str | None = Field(default=None, max_length=160)
+    shipping_fee: int | None = Field(default=None, ge=0)
 
 
 class ProductNarrativeBody(BaseModel):
@@ -71,7 +72,18 @@ class ProductNarrativeBody(BaseModel):
     advantages: list[str] = Field(default_factory=list, max_length=30)
     limitations: list[str] = Field(default_factory=list, max_length=30)
     recommended_uses: list[str] = Field(default_factory=list, max_length=30)
+    usage_instructions: list[str] = Field(default_factory=list, max_length=30)
     cautions: list[str] = Field(default_factory=list, max_length=30)
+
+
+class ProductFactsBody(BaseModel):
+    primary_material: str | None = None
+    secondary_material: str | None = None
+    weight: str | None = None
+    dimensions: dict = Field(default_factory=dict)
+    certifications: list = Field(default_factory=list)
+    components: list[str] = Field(default_factory=list, max_length=100)
+    fact_notes: str | None = None
 
 
 class SKUDetailUpdate(SKUManagementBody):
@@ -85,6 +97,7 @@ class ChannelDetailUpdate(ChannelListingBody):
 class ProductDetailSaveBody(BaseModel):
     product: ProductMasterBody
     narrative: ProductNarrativeBody = Field(default_factory=ProductNarrativeBody)
+    facts: ProductFactsBody = Field(default_factory=ProductFactsBody)
     skus: list[SKUDetailUpdate] = Field(default_factory=list, max_length=200)
     channels: list[ChannelDetailUpdate] = Field(default_factory=list, max_length=600)
     changed_by: str = Field(default="dashboard-user", min_length=1, max_length=128)
@@ -113,6 +126,7 @@ def _narrative_payload(profile: ProductRegistrationProfile | None) -> dict:
         "advantages": marketing.get("selling_points") or [],
         "limitations": marketing.get("limitations") or [],
         "recommended_uses": operating.get("usage") or [],
+        "usage_instructions": operating.get("usage_instructions") or [],
         "cautions": marketing.get("product_notes") or [],
         "facts_confirmed": bool(profile and profile.facts_confirmed),
         "ai_suggestions": profile.ai_suggestions or {} if profile else {},
@@ -133,6 +147,7 @@ def _sku_payload(row: ProductSKU, channels: list[SalesChannelListing]) -> dict:
         "current_stock": row.current_stock, "available_stock": row.available_stock,
         "safety_stock": row.safety_stock, "incoming_stock": row.incoming_stock,
         "storage_location": row.storage_location,
+        "shipping_fee": row.shipping_fee,
         "stock_warning": row.available_stock <= row.safety_stock,
         "channels": [_listing_payload(x) for x in channels],
     }
@@ -149,8 +164,9 @@ def _registration_review(*, skus: list[ProductSKU],
         {"code": "sku_price", "label": "SKU 판매가",
          "ready": bool(skus) and all(sku.sale_price is not None for sku in skus),
          "next_action": "가격·재고·배송에서 모든 SKU의 현재 판매가를 입력하세요."},
-        {"code": "shipping", "label": "배송조건", "ready": False,
-         "next_action": "상품별 배송설정 기능이 연결된 뒤 배송조건을 지정하세요."},
+        {"code": "shipping", "label": "배송비",
+         "ready": bool(skus) and all(sku.shipping_fee is not None for sku in skus),
+         "next_action": "가격·재고·배송에서 모든 SKU의 배송비를 입력하세요."},
         {"code": "selling_content", "label": "판매콘텐츠",
          "ready": detail_page_ready,
          "next_action": "판매콘텐츠에서 승인된 상세페이지를 준비하세요."},
@@ -232,6 +248,15 @@ def product_management_detail(product_id: str, tenant_id: str = Query(...),
         "created_at": product.created_at.isoformat(),
         "updated_at": product.updated_at.isoformat(),
         "narrative": _narrative_payload(profile),
+        "facts": {
+            "primary_material": profile.primary_material if profile else None,
+            "secondary_material": profile.secondary_material if profile else None,
+            "weight": profile.weight if profile else None,
+            "dimensions": profile.dimensions or {} if profile else {},
+            "certifications": profile.certifications or [] if profile else [],
+            "components": (profile.packaging or {}).get("components", []) if profile else [],
+            "fact_notes": profile.fact_notes if profile else None,
+        },
         "skus": [_sku_payload(s, by_sku.get(s.id, [])) for s in skus],
     }
 
@@ -295,11 +320,12 @@ def save_product_detail(product_id: str, body: ProductDetailSaveBody,
             "sku_ids": sorted(set(unknown + channel_unknown)),
         })
 
-    product.name = body.product.name.strip()
+    # 상품명·상품코드·상품분류는 신규등록에서 넘어온 기준값이다.
+    # 통합관리 상세 저장에서는 의도치 않게 변경하지 않는다.
     product.status = body.product.status
     product.description = _clean(body.product.description)
     for field in (
-        "category", "brand", "model_name", "manufacturer",
+        "brand", "model_name", "manufacturer",
         "country_of_origin", "supplier_name",
     ):
         setattr(product, field, _clean(getattr(body.product, field)))
@@ -310,6 +336,7 @@ def save_product_detail(product_id: str, body: ProductDetailSaveBody,
             "name", "option_value", "barcode", "sales_unit", "status",
             "purchase_cost", "list_price", "sale_price", "current_stock",
             "available_stock", "safety_stock", "incoming_stock", "storage_location",
+            "shipping_fee",
         ):
             value = getattr(item, field)
             if field == "name":
@@ -328,6 +355,7 @@ def save_product_detail(product_id: str, body: ProductDetailSaveBody,
     operating = dict(profile.operating_info or {})
     marketing = dict(profile.marketing_info or {})
     operating["usage"] = _clean_list(body.narrative.recommended_uses)
+    operating["usage_instructions"] = _clean_list(body.narrative.usage_instructions)
     marketing.update({
         "features": _clean_list(body.narrative.features),
         "selling_points": _clean_list(body.narrative.advantages),
@@ -336,6 +364,15 @@ def save_product_detail(product_id: str, body: ProductDetailSaveBody,
     })
     profile.operating_info = operating
     profile.marketing_info = marketing
+    profile.primary_material = _clean(body.facts.primary_material)
+    profile.secondary_material = _clean(body.facts.secondary_material)
+    profile.weight = _clean(body.facts.weight)
+    profile.dimensions = body.facts.dimensions or {}
+    profile.certifications = body.facts.certifications or []
+    packaging = dict(profile.packaging or {})
+    packaging["components"] = _clean_list(body.facts.components)
+    profile.packaging = packaging
+    profile.fact_notes = _clean(body.facts.fact_notes)
 
     for item in body.channels:
         row = db.scalar(select(SalesChannelListing).where(
@@ -406,7 +443,7 @@ def update_sku_management(sku_id: str, body: SKUManagementBody,
     sku.sales_unit = body.sales_unit
     sku.status = body.status
     for field in ("purchase_cost", "list_price", "sale_price", "current_stock",
-                  "available_stock", "safety_stock", "incoming_stock"):
+            "available_stock", "safety_stock", "incoming_stock", "shipping_fee"):
         setattr(sku, field, getattr(body, field))
     sku.storage_location = _clean(body.storage_location)
     db.commit()
@@ -432,7 +469,7 @@ def add_managed_sku(product_id: str, body: SKUManagementBody,
     sku.sales_unit = body.sales_unit
     sku.status = body.status
     for field in ("purchase_cost", "list_price", "sale_price", "current_stock",
-                  "available_stock", "safety_stock", "incoming_stock"):
+                  "available_stock", "safety_stock", "incoming_stock", "shipping_fee"):
         setattr(sku, field, getattr(body, field))
     sku.storage_location = _clean(body.storage_location)
     db.commit()

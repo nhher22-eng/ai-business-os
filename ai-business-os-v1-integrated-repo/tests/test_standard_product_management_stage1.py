@@ -78,9 +78,9 @@ def test_management_center_separates_new_registration_and_existing_edit():
 
 def test_stage_one_sections_and_scope_are_visible():
     for marker in (
-        "기본정보", "옵션·SKU·가격·재고", "상품 콘텐츠", "판매채널",
+        "상품정보", "상품설명", "옵션·SKU", "가격·재고·배송", "판매콘텐츠", "판매채널",
         "매입원가", "정상 판매가", "가용재고", "안전재고", "입고 예정",
-        "FACT·원본 자료", "네이버", "쿠팡", "자사몰",
+        "등록 자료", "네이버", "쿠팡", "자사몰",
     ):
         assert marker in DETAIL_HTML
     assert "주문 자동 차감은 이후 단계" in DETAIL_HTML

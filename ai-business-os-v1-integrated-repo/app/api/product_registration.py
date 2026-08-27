@@ -60,6 +60,7 @@ class NewProductBody(FactBody):
     product_code: str | None = Field(default=None, max_length=128)
     name: str = Field(min_length=1, max_length=240)
     description: str | None = None
+    category: str | None = Field(default=None, max_length=160)
     options: list[str] = Field(default_factory=list, max_length=100)
 
 
@@ -69,7 +70,7 @@ class ApplySuggestionsBody(BaseModel):
 
 
 class ImageRoleBody(BaseModel):
-    role: Literal["primary", "additional"]
+    role: Literal["primary", "additional", "hero", "right_45", "front"]
     asset_id: str
 
 
@@ -127,6 +128,9 @@ def _profile_payload(row: ProductRegistrationProfile, product: Product) -> dict:
         "images": {
             "primary_asset_id": row.primary_image_asset_id,
             "additional_asset_ids": row.additional_image_asset_ids or [],
+            "hero_asset_id": row.hero_image_asset_id,
+            "right45_asset_id": row.right45_image_asset_id,
+            "front_asset_id": row.front_image_asset_id,
         },
     }
 
@@ -234,6 +238,7 @@ def register_product(
         name=body.name,
         status="draft",
         description=body.description,
+        category=body.category,
     )
     db.add(product)
     db.flush()
@@ -374,6 +379,11 @@ def list_product_images(
     return {
         "primary_asset_id": row.primary_image_asset_id,
         "additional_asset_ids": row.additional_image_asset_ids or [],
+        "assignments": {
+            "hero": row.hero_image_asset_id,
+            "right_45": row.right45_image_asset_id,
+            "front": row.front_image_asset_id,
+        },
         "assets": [
             {
                 "id": asset.id,
@@ -382,6 +392,7 @@ def list_product_images(
                 "asset_uri": asset.asset_uri,
                 "mime_type": asset.mime_type,
                 "sort_order": asset.sort_order,
+                "content_url": f"/api/v1/product-registration-assets/references/{asset.id}/content?tenant_id={tenant_id}",
             }
             for asset in assets
         ],
@@ -599,7 +610,13 @@ def assign_product_image(
         raise HTTPException(404, detail="image asset not found")
 
     additional = list(row.additional_image_asset_ids or [])
-    if body.role == "primary":
+    if body.role == "hero":
+        row.hero_image_asset_id = asset.id
+    elif body.role == "right_45":
+        row.right45_image_asset_id = asset.id
+    elif body.role == "front":
+        row.front_image_asset_id = asset.id
+    elif body.role == "primary":
         row.primary_image_asset_id = asset.id
         if asset.id in additional:
             additional.remove(asset.id)

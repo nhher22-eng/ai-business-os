@@ -43,7 +43,7 @@ def test_registration_review_reports_real_missing_work_without_external_action()
 
     assert result["status"] == "REVIEW"
     assert result["missing_labels"] == [
-        "정면 원본 이미지", "SKU 판매가", "배송조건", "판매콘텐츠", "판매채널",
+        "정면 원본 이미지", "SKU 판매가", "배송비", "판매콘텐츠", "판매채널",
     ]
     assert result["external_actions_executed"] is False
     assert result["approval_required_before_external_execution"] is True
@@ -82,8 +82,10 @@ def test_detail_batch_save_updates_product_narrative_and_skus_once():
     result = save_product_detail("p1", body, tenant_id="t1", db=db)
 
     assert product.product_code == "KEEP-001"
-    assert product.name == "새 이름"
+    assert product.name == "이전 이름"
+    assert product.category is None
     assert sku.name == "10m"
+    assert sku.shipping_fee is None
     assert profile.marketing_info["features"] == ["특징"]
     assert profile.operating_info["usage"] == ["정원"]
     assert result["external_actions_executed"] is False
