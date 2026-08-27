@@ -33,14 +33,12 @@ def test_image_asset_ui_contains_dec085_flow():
     assert "직접 연결 원본" in html
 
 
-def test_product_registration_shows_current_confirmed_source_thumbnails():
+def test_product_registration_defers_source_thumbnail_assignment_to_integrated_management():
     response = client.get("/product-registration")
     assert response.status_code == 200
-    assert "현재 등록 원본" in response.text
-    assert "currentSourceImages" in response.text
-    assert "loadCurrentSourceImages" in response.text
-    assert "data-current-source-classification" in response.text
-    assert "updateRegisteredSourceClassification" in response.text
+    assert "준비된 원본 자료" in response.text
+    assert "대표·45도·정면 지정은 통합상품관리" in response.text
+    assert "uploadImages(data.product.id)" in response.text
 
 
 def test_workflow_plan_and_execute_are_persistent_and_idempotent(tmp_path):

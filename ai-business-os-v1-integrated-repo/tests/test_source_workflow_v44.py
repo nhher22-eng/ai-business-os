@@ -9,22 +9,22 @@ client = TestClient(app)
 def test_product_registration_accumulates_and_manages_source_queue():
     text = client.get("/product-registration").text
     for marker in (
-        "sourceImageQueue", "appendSourceImages", "sourceImageQueue.push",
-        "data-source-remove", "전체 선택 취소", "선택한 원본 이미지 저장",
-        "sourceClassificationOptions", "input.value=''",
+        "원본 이미지 선택", "참고문서 선택", "multiple",
+        "uploadImages", "uploadDocs", "source_classification','unknown",
     ):
         assert marker in text
 
 
-def test_registration_stage_navigation_and_completion_links():
+def test_registration_is_single_page_and_finishes_in_integrated_management():
     text = client.get("/product-registration").text
     for marker in (
-        "registration-stage-hidden", "registrationPrev", "registrationNext",
-        "← 이전 단계", "다음 단계 →", "v2-registration-complete",
-        "이미지 요소 자산 만들기", "콘텐츠 문안 만들기", "홈으로 이동",
+        "1. 기본정보", "2. SKU 초기 구성", "3. 준비된 원본 자료",
+        "상품 생성 후 통합관리로 이동", "/commerce-catalog/product/${data.product.id}",
     ):
         assert marker in text
-    assert "await ensureProductIdentityForSourceUpload(s)" in text
+    assert "registrationNext" not in text
+    assert "await uploadImages(data.product.id)" in text
+    assert "await uploadDocs(data.product.id)" in text
 
 
 def test_image_asset_generator_reads_registered_sources_and_image_facts():
@@ -36,4 +36,3 @@ def test_image_asset_generator_reads_registered_sources_and_image_facts():
         "normalizeRegisteredSource", "[...registeredRows,...factRows]",
     ):
         assert marker in text
-

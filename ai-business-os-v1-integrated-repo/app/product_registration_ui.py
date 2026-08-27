@@ -117,7 +117,8 @@ def inject_product_registration_link(html: str) -> str:
 
 @router.get("/product-registration", response_class=HTMLResponse, include_in_schema=False)
 def product_registration_page():
+    from app.product_registration_simple_ui import HTML as approved_html
     return HTMLResponse(
-        content=HTML,
+        content=approved_html,
         headers={"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"},
     )

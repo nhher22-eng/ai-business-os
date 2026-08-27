@@ -62,6 +62,8 @@ from app.services.product_registration_safety_patch import install_product_regis
 from app.services.product_image_fact_oom_patch import install_product_image_fact_oom_patch
 from app.services.product_image_final_policy_patch import install_product_image_final_policy_patch
 from app.services.queue import queue_depth
+from app.agent_work_ui import router as agent_work_ui_router
+from app.global_navigation import GlobalNavigationMiddleware
 
 
 install_fact_grounded_copy_patch()
@@ -91,6 +93,7 @@ app = FastAPI(
     title=settings.app_name,
     version="1.0.0",
 )
+app.add_middleware(GlobalNavigationMiddleware)
 
 app.include_router(runs_router)
 app.include_router(operations_router)
@@ -126,6 +129,7 @@ app.include_router(detail_page_ui.router)
 app.include_router(detail_page_template_ui_router)
 app.include_router(workflow_ui_router)
 app.include_router(unified_tool_ui_router)
+app.include_router(agent_work_ui_router)
 
 
 @app.get("/")

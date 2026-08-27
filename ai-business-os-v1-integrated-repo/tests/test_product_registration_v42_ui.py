@@ -6,30 +6,22 @@ from app.main import app
 client = TestClient(app)
 
 
-def test_registration_displays_one_stage_at_a_time():
+def test_registration_is_approved_single_page():
     text = client.get("/product-registration").text
-    assert response_ok(text)
-    assert "registration-stage-hidden" in text
-    assert "panel.classList.add('registration-stage-hidden')" in text
-    assert "target.classList.remove('hidden','registration-stage-hidden')" in text
-    for label in ("상품 식별정보", "객관적 상품 FACT", "옵션·규격·구성품", "원본 자료 등록", "FACT 확인·완료"):
-        assert label in text
+    for marker in ("신규 상품 등록", "기본정보", "SKU 초기 구성", "준비된 원본 자료", "상품 생성 후 통합관리로 이동"):
+        assert marker in text
+    assert "대표·45도·정면 지정은 통합상품관리" in text
+    assert "registrationNext" not in text
 
 
-def test_registration_has_previous_next_navigation():
+def test_registration_recognizes_common_unit_inputs():
     text = client.get("/product-registration").text
-    for marker in ("registrationPrev", "registrationNext", "moveRegistrationStage", "← 이전 단계", "다음 단계 →", "1 / 5"):
+    for marker in ("10m, 20m, 30m", "용량", "중량", "길이", "수량", "입력한 표기는 그대로 초기값"):
         assert marker in text
 
 
-def test_source_upload_auto_saves_product_identity():
+def test_registration_uploads_images_and_documents_before_redirect():
     text = client.get("/product-registration").text
-    assert "ensureProductIdentityForSourceUpload" in text
-    assert "await window.saveFacts()" in text
-    assert "상품 식별정보 자동 저장 중" in text
-    assert "await ensureProductIdentityForSourceUpload(s)" in text
-
-
-def response_ok(text: str) -> bool:
-    return "새 상품 등록" in text and "원본 이미지 저장" in text
-
+    assert "uploadImages(data.product.id)" in text
+    assert "uploadDocs(data.product.id)" in text
+    assert "/commerce-catalog/product/${data.product.id}" in text
