@@ -1,3 +1,5 @@
+"""Unified product management regression gate."""
+
 from unittest.mock import MagicMock
 
 from app.api.commerce_catalog import (
