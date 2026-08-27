@@ -98,6 +98,6 @@ def test_product_detail_loads_confirmed_image_facts_and_click_zoom():
     assert "confirmed.find(x=>x.is_primary)||right" in DETAIL_HTML
     assert "object-fit:cover" in DETAIL_HTML
     assert "openLightbox(url,label)" in DETAIL_HTML
-    assert \'aria-label="이미지 확대보기"\' in DETAIL_HTML
+    assert 'aria-label="이미지 확대보기"' in DETAIL_HTML
     assert "우측 45도 · 필수" in DETAIL_HTML
     assert "정면 · 필수" in DETAIL_HTML
