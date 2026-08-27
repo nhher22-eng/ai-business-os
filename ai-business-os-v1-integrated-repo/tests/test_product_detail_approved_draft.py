@@ -17,7 +17,7 @@ def test_approved_detail_ui_has_six_areas_and_shared_execution_controls():
     for marker in (
         "상품정보", "옵션·SKU", "가격·재고·배송", "등록 자료",
         "판매콘텐츠", "판매채널", "AI 제안", "적용 설정 보기",
-        "Agent 실행 허용", "변경사항 저장",
+        "Agent 실행 허용", "변경사항 저장", "변경·작업이력",
     ):
         assert marker in DETAIL_HTML
     assert "/products/${product.id}/detail" in DETAIL_HTML
@@ -88,3 +88,14 @@ def test_detail_batch_save_updates_product_narrative_and_skus_once():
     assert profile.operating_info["usage"] == ["정원"]
     assert result["external_actions_executed"] is False
     db.commit.assert_called_once()
+
+
+def test_product_detail_loads_confirmed_image_facts_and_click_zoom():
+    assert "/api/v1/product-image-facts/products/${product.id}" in DETAIL_HTML
+    assert "confirmed=data.images.filter(x=>x.status===\'confirmed\')" in DETAIL_HTML
+    assert "confirmed.find(x=>x.is_primary)||right" in DETAIL_HTML
+    assert "object-fit:cover" in DETAIL_HTML
+    assert "openLightbox(url,label)" in DETAIL_HTML
+    assert \'aria-label="이미지 확대보기"\' in DETAIL_HTML
+    assert "우측 45도 · 필수" in DETAIL_HTML
+    assert "정면 · 필수" in DETAIL_HTML
