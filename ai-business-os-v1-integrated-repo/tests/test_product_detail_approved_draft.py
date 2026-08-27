@@ -101,3 +101,17 @@ def test_product_detail_loads_confirmed_image_facts_and_click_zoom():
     assert 'aria-label="이미지 확대보기"' in DETAIL_HTML
     assert "우측 45도 · 필수" in DETAIL_HTML
     assert "정면 · 필수" in DETAIL_HTML
+
+
+def test_product_summary_is_the_visual_landing_workspace():
+    for marker in (
+        "요약", "대표이미지 없음", "등록 준비상태", "실행·승인 상태",
+        "마지막 실행결과", "상품정보 수정", "옵션·SKU 관리",
+        "등록 자료 관리", "판매콘텐츠 관리", "버전·승인 관리",
+        "여러 상품 조합용",
+    ):
+        assert marker in DETAIL_HTML
+    assert '<section id="summary" class="panel on">' in DETAIL_HTML
+    assert '<section id="info" class="panel">' in DETAIL_HTML
+    assert "await readinessCheck(true)" in DETAIL_HTML
+    assert "$('metricImages').textContent=confirmed.length" in DETAIL_HTML
