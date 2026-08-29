@@ -1,6 +1,6 @@
 import secrets
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import settings
@@ -10,6 +10,7 @@ control_bearer = HTTPBearer(auto_error=False)
 
 
 def require_agent_control_auth(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(
         control_bearer
     ),
@@ -27,14 +28,16 @@ def require_agent_control_auth(
             },
         )
 
-    if (
-        credentials is None
-        or credentials.scheme.lower() != "bearer"
-        or not secrets.compare_digest(
-            credentials.credentials,
-            expected,
-        )
-    ):
+    bearer_valid = (
+        credentials is not None
+        and credentials.scheme.lower() == "bearer"
+        and secrets.compare_digest(credentials.credentials, expected)
+    )
+    # The common 8-hour dashboard session is also a valid operator session.
+    # Import lazily to keep the authentication modules acyclic.
+    from app.api.dashboard_session import COOKIE_NAME, _valid_session
+    session_valid = _valid_session(request.cookies.get(COOKIE_NAME))
+    if not bearer_valid and not session_valid:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
