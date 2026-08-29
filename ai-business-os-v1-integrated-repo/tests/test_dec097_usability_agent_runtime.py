@@ -25,3 +25,11 @@ def test_agent_workspace_uses_real_run_api_and_ordered_steps():
     assert "if(n>maxStep)return" in AGENT_HTML
     assert "배포 전 UI 구현본" not in AGENT_HTML
 
+
+def test_agent_confirmation_repeats_until_user_confirms():
+    for marker in (
+        "답변 전달", "sendConfirmationAnswer", "confirmationMessages",
+        "confirmationReady", "확인하고 계속", "추가사항 없음",
+    ):
+        assert marker in AGENT_HTML
+    assert "confirmationReady?'<button class=\"btn next\">확인하고 계속</button>':''" in AGENT_HTML
