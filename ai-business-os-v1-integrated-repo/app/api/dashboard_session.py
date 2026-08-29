@@ -1,7 +1,12 @@
 import hashlib
 import hmac
+import base64
+import io
 import secrets
 import time
+from urllib.parse import quote
+
+import redis
 
 from fastapi import (
     APIRouter,
@@ -11,6 +16,7 @@ from fastapi import (
     Response,
     status,
 )
+from fastapi.responses import RedirectResponse
 from fastapi.security import (
     HTTPAuthorizationCredentials,
     HTTPBearer,
@@ -28,6 +34,8 @@ bearer = HTTPBearer(auto_error=False)
 
 COOKIE_NAME = "ai_business_os_session"
 SESSION_SECONDS = 8 * 60 * 60
+MOBILE_LINK_SECONDS = 2 * 60
+MOBILE_LINK_PREFIX = "dashboard-mobile-link:"
 
 
 def _secret() -> str:
@@ -80,6 +88,51 @@ def _valid_session(value: str | None) -> bool:
     return hmac.compare_digest(signature, expected)
 
 
+def _set_session_cookie(response: Response) -> None:
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=_make_session(),
+        max_age=SESSION_SECONDS,
+        httponly=True,
+        samesite="strict",
+        secure=settings.app_env != "test",
+        path="/",
+    )
+
+
+def _mobile_link_key(code: str) -> str:
+    digest = hashlib.sha256(code.encode()).hexdigest()
+    return f"{MOBILE_LINK_PREFIX}{digest}"
+
+
+def _redis():
+    return redis.Redis.from_url(settings.redis_url, decode_responses=True)
+
+
+def _public_origin(request: Request) -> str:
+    host = request.headers.get("host", "").strip()
+    if not host or any(char in host for char in "/\\\r\n"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="valid host required",
+        )
+    forwarded = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip()
+    scheme = forwarded if forwarded in {"http", "https"} else request.url.scheme
+    if settings.app_env != "test":
+        scheme = "https"
+    return f"{scheme}://{host}"
+
+
+def _qr_data_url(value: str) -> str:
+    import qrcode
+
+    image = qrcode.make(value)
+    output = io.BytesIO()
+    image.save(output, format="PNG")
+    encoded = base64.b64encode(output.getvalue()).decode()
+    return f"data:image/png;base64,{encoded}"
+
+
 def require_business_auth(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
@@ -127,15 +180,7 @@ def create_session(
             detail="valid Bearer credential required",
         )
 
-    response.set_cookie(
-        key=COOKIE_NAME,
-        value=_make_session(),
-        max_age=SESSION_SECONDS,
-        httponly=True,
-        samesite="strict",
-        secure=False,
-        path="/",
-    )
+    _set_session_cookie(response)
 
     return {
         "authenticated": True,
@@ -154,6 +199,42 @@ def session_status(request: Request):
         )
 
     return {"authenticated": True}
+
+
+@router.post("/mobile-link", dependencies=[Depends(require_business_auth)])
+def create_mobile_link(request: Request):
+    code = secrets.token_urlsafe(32)
+    _redis().setex(
+        _mobile_link_key(code),
+        MOBILE_LINK_SECONDS,
+        "unused",
+    )
+    path = f"/api/v1/dashboard/mobile-login?code={quote(code)}"
+    login_url = f"{_public_origin(request)}{path}"
+    return {
+        "login_url": login_url,
+        "qr_data_url": _qr_data_url(login_url),
+        "expires_in_seconds": MOBILE_LINK_SECONDS,
+        "single_use": True,
+    }
+
+
+@router.get("/mobile-login", name="consume_mobile_link")
+def consume_mobile_link(code: str):
+    if not code or len(code) > 200:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="valid mobile login code required",
+        )
+    value = _redis().getdel(_mobile_link_key(code))
+    if value != "unused":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="mobile login link is invalid, expired, or already used",
+        )
+    response = RedirectResponse(url="/business-home", status_code=303)
+    _set_session_cookie(response)
+    return response
 
 
 @router.delete("/session")
