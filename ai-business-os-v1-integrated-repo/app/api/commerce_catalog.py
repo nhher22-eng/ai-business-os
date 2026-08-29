@@ -477,6 +477,30 @@ def add_managed_sku(product_id: str, body: SKUManagementBody,
     return _sku_payload(sku, [])
 
 
+@router.delete("/skus/{sku_id}")
+def delete_managed_sku(sku_id: str, tenant_id: str = Query(...),
+                       db: Session = Depends(get_db)):
+    """Delete an unused SKU; referenced SKUs must be deactivated instead."""
+    sku = db.scalar(select(ProductSKU).where(
+        ProductSKU.id == sku_id, ProductSKU.tenant_id == tenant_id
+    ))
+    if sku is None:
+        raise HTTPException(404, detail="sku not found")
+    listing = db.scalar(select(SalesChannelListing.id).where(
+        SalesChannelListing.tenant_id == tenant_id,
+        SalesChannelListing.sku_id == sku.id,
+    ))
+    if listing is not None:
+        raise HTTPException(
+            409,
+            detail="판매채널 연결 이력이 있는 SKU는 삭제할 수 없습니다. 비활성화하세요.",
+        )
+    deleted = {"id": sku.id, "sku_code": sku.sku_code, "product_id": sku.product_id}
+    db.delete(sku)
+    db.commit()
+    return deleted
+
+
 @router.delete("/products/{product_id}")
 def delete_product(product_id: str, body: DeleteProductBody,
                    tenant_id: str = Query(...), db: Session = Depends(get_db)):

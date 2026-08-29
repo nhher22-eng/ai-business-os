@@ -480,15 +480,13 @@ function values() {
 
 function headers(json = false) {
   const v = values();
-
-  if (!v.token) {
-    throw new Error("Bearer token is required.");
-  }
-
   const h = {
-    "Authorization": `Bearer ${v.token}`,
     "X-Operator-ID": v.operator
   };
+
+  if (v.token) {
+    h["Authorization"] = `Bearer ${v.token}`;
+  }
 
   if (json) {
     h["Content-Type"] = "application/json";
@@ -538,7 +536,7 @@ function render(data) {
 }
 
 async function request(url, options = {}) {
-  const response = await fetch(url, options);
+  const response = await fetch(url, {credentials: "same-origin", ...options});
 
   let data;
 
