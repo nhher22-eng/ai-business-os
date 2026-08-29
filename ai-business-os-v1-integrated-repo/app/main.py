@@ -64,6 +64,8 @@ from app.services.product_image_final_policy_patch import install_product_image_
 from app.services.queue import queue_depth
 from app.agent_work_ui import router as agent_work_ui_router
 from app.api.agent_tools import router as agent_tools_router
+from app.api.service_management import router as service_management_router
+from app.service_management_ui import router as service_management_ui_router
 from app.global_navigation import GlobalNavigationMiddleware
 
 
@@ -132,6 +134,8 @@ app.include_router(workflow_ui_router)
 app.include_router(unified_tool_ui_router)
 app.include_router(agent_work_ui_router)
 app.include_router(agent_tools_router)
+app.include_router(service_management_router)
+app.include_router(service_management_ui_router)
 
 
 @app.get("/")
@@ -143,6 +147,7 @@ def root():
         "docs": "/docs",
         "operations": "/operations",
         "business_home": "/business-home",
+        "service_management": "/service-management",
     }
 
 
