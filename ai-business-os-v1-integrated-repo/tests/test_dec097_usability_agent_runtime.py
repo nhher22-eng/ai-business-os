@@ -21,7 +21,7 @@ def test_product_detail_has_additive_images_and_inactive_sku_filter():
 def test_agent_workspace_uses_real_run_api_and_ordered_steps():
     assert "직접 입력하기" not in AGENT_HTML
     assert "계획 수정 요청" in AGENT_HTML
-    assert "'/api/v1/runs'" in AGENT_HTML
+    assert "'/api/v1/agent-tools/execute'" in AGENT_HTML
     assert "if(n>maxStep)return" in AGENT_HTML
     assert "배포 전 UI 구현본" not in AGENT_HTML
 

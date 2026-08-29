@@ -63,6 +63,7 @@ from app.services.product_image_fact_oom_patch import install_product_image_fact
 from app.services.product_image_final_policy_patch import install_product_image_final_policy_patch
 from app.services.queue import queue_depth
 from app.agent_work_ui import router as agent_work_ui_router
+from app.api.agent_tools import router as agent_tools_router
 from app.global_navigation import GlobalNavigationMiddleware
 
 
@@ -130,6 +131,7 @@ app.include_router(detail_page_template_ui_router)
 app.include_router(workflow_ui_router)
 app.include_router(unified_tool_ui_router)
 app.include_router(agent_work_ui_router)
+app.include_router(agent_tools_router)
 
 
 @app.get("/")

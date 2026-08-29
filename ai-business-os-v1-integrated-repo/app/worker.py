@@ -1,4 +1,5 @@
 import os
+import json
 import socket
 import time
 from datetime import datetime, timezone
@@ -7,6 +8,7 @@ from app.db.session import SessionLocal
 from app.db.models import Run, RunStatus, WorkerHeartbeat
 from app.services.queue import dequeue_run, enqueue_run
 from app.services.agent_control import authorize_identity
+from app.services.agent_tools import TOOL_PROTOCOL, execute_tool
 
 WORKER_ID = f"{socket.gethostname()}:{os.getpid()}"
 
@@ -34,7 +36,7 @@ def heartbeat():
         db.commit()
 
 
-def execute(run: Run, attempt: int) -> str:
+def execute(db, run: Run, attempt: int) -> str:
     # Test-only failure injection.
     # Disabled unless AIOS_ENABLE_FAILURE_INJECTION=1.
     if FAILURE_INJECTION_ENABLED:
@@ -44,8 +46,22 @@ def execute(run: Run, attempt: int) -> str:
         if run.task.startswith("PG_RETRY_ONCE:") and attempt == 0:
             raise RuntimeError("Injected transient failure for PG validation")
 
-    # Safe baseline executor: no external tool execution yet.
-    return f"Processed by AI Business OS worker: {run.task}"
+    try:
+        payload = json.loads(run.task)
+    except (json.JSONDecodeError, TypeError):
+        payload = None
+    if isinstance(payload, dict) and payload.get("protocol") == TOOL_PROTOCOL:
+        return execute_tool(db, payload)
+
+    # Safe fallback: an unregistered task is recorded but performs no change.
+    return json.dumps(
+        {
+            "verified": False,
+            "actual_change": False,
+            "message": "요청 기록 완료 · 실제 상품 변경 없음",
+        },
+        ensure_ascii=False,
+    )
 
 
 def process(run_id: str, attempt: int = 0):
@@ -85,7 +101,7 @@ def process(run_id: str, attempt: int = 0):
         db.commit()
 
         try:
-            run.result = execute(run, attempt)
+            run.result = execute(db, run, attempt)
             run.status = RunStatus.succeeded
             db.commit()
 
