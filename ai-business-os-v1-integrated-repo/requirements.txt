@@ -11,4 +11,5 @@ pytest>=8,<9
 
 python-multipart>=0.0.9,<1
 Pillow>=12.1,<13
+qrcode>=8,<9
 rembg[cpu]>=2.0.77,<3

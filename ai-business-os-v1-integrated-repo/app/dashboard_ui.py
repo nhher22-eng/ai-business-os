@@ -310,6 +310,24 @@ document.querySelector(".top").insertAdjacentHTML(
       </button>
 
       <span id="dataStatus" class="muted">Not connected</span>
+
+      <button
+        id="mobileConnect"
+        style="display:none;padding:10px 16px;border-radius:9px;
+               border:1px solid #35445a;background:#2563eb;
+               color:#fff;font-weight:800;cursor:pointer"
+      >
+        모바일 연결 QR
+      </button>
+    </div>
+    <div id="mobileConnectPanel" style="display:none;margin-top:16px;
+         padding:16px;border:1px solid #35445a;border-radius:12px;text-align:center">
+      <div style="font-weight:800;margin-bottom:8px">휴대폰 카메라로 QR을 스캔하세요</div>
+      <img id="mobileConnectQr" alt="일회용 모바일 로그인 QR"
+           style="width:220px;max-width:100%;background:#fff;padding:10px;border-radius:10px">
+      <div class="muted" style="margin-top:8px">2분 동안 한 번만 사용할 수 있습니다.</div>
+      <button id="closeMobileConnect" style="margin-top:10px;padding:8px 14px;
+              border-radius:8px;border:1px solid #35445a;cursor:pointer">닫기</button>
     </div>
   </div>
   `
@@ -369,7 +387,38 @@ function setDashboardConnected() {
   button.textContent = "Refresh";
   document.getElementById("dataStatus").textContent =
     "Connected";
+  document.getElementById("mobileConnect").style.display = "inline-block";
 }
+
+async function createMobileConnectQr() {
+  const button = document.getElementById("mobileConnect");
+  const panel = document.getElementById("mobileConnectPanel");
+  button.disabled = true;
+  button.textContent = "QR 생성 중…";
+  try {
+    const response = await fetch("/api/v1/dashboard/mobile-link", {
+      method: "POST",
+      credentials: "same-origin"
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
+    document.getElementById("mobileConnectQr").src = data.qr_data_url;
+    panel.style.display = "block";
+  } catch (error) {
+    document.getElementById("dataStatus").textContent = String(error);
+  } finally {
+    button.disabled = false;
+    button.textContent = "모바일 연결 QR";
+  }
+}
+
+document.getElementById("mobileConnect").addEventListener(
+  "click", createMobileConnectQr
+);
+document.getElementById("closeMobileConnect").addEventListener("click", () => {
+  document.getElementById("mobileConnectPanel").style.display = "none";
+  document.getElementById("mobileConnectQr").removeAttribute("src");
+});
 
 async function createDashboardSession() {
   const token =
