@@ -50,6 +50,7 @@ async def plan_agent_request(
     request_text: str = Form(..., min_length=1, max_length=5000),
     workflow: str = Form(default="기존 상품 수정", max_length=80),
     tenant_id: str = Form(default=LEGACY_TENANT_ID, max_length=128),
+    context_product_id: str | None = Form(default=None, max_length=36),
     files: list[UploadFile] = File(default=[]),
     db: Session = Depends(get_db),
 ):
@@ -67,7 +68,8 @@ async def plan_agent_request(
     except ValueError as exc:
         raise HTTPException(422, detail=str(exc)) from exc
     return build_plan(db, tenant_id=tenant_id, workflow=workflow,
-                      request_text=request_text, staged=staged)
+                      request_text=request_text, staged=staged,
+                      context_product_id=context_product_id)
 
 
 @router.post("/execute")

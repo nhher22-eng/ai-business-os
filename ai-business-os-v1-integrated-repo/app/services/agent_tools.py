@@ -183,7 +183,8 @@ def stage_file(*, tenant_id: str, filename: str, content_type: str | None,
 
 
 def build_plan(db: Session, *, tenant_id: str, workflow: str,
-               request_text: str, staged: list[dict[str, Any]]) -> dict[str, Any]:
+               request_text: str, staged: list[dict[str, Any]],
+               context_product_id: str | None = None) -> dict[str, Any]:
     action = infer_action(request_text, attachment_count=len(staged))
     if action is None:
         return {"supported": False, "message": "현재 등록된 공통 도구로 처리할 수 없는 요청입니다.",
@@ -202,6 +203,25 @@ def build_plan(db: Session, *, tenant_id: str, workflow: str,
         plan["candidates"] = product_candidates(
             db, tenant_id=tenant_id, query=request_text, action=action,
         )
+        if context_product_id:
+            context_product = db.scalar(select(Product).where(
+                Product.id == context_product_id,
+                Product.tenant_id == tenant_id,
+            ))
+            if context_product is not None:
+                exact = {
+                    "id": context_product.id,
+                    "product_code": context_product.product_code,
+                    "name": context_product.name,
+                    "category": context_product.category,
+                    "score": 2.0,
+                    "management_url": f"/commerce-catalog/product/{context_product.id}",
+                    "context_selected": True,
+                }
+                plan["candidates"] = [exact] + [
+                    row for row in plan["candidates"]
+                    if row["id"] != context_product.id
+                ]
     if action == "sku_add":
         plan["args"] = parse_sku_args(request_text)
     else:
