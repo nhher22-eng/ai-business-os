@@ -26,7 +26,7 @@ def test_business_home_has_four_direct_and_agent_entries():
 def test_agent_workspace_contains_full_safe_conversation_flow():
     for label in ("1 요청", "2 확인", "3 계획", "4 승인", "5 결과"):
         assert label in AGENT_HTML
-    for label in ("말하기", "사진·문서 첨부", "음성 대화", "계획 읽어주기", "Agent 실행 승인"):
+    for label in ("말하기", "사진·문서 첨부", "음성 대화", "계획 수정 요청", "Agent 실행 승인"):
         assert label in AGENT_HTML
     assert "외부 게시·가격 변경·판매 시작은 하지 않습니다" in AGENT_HTML
     assert "a.disabled=!c.checked" in AGENT_HTML
