@@ -43,3 +43,10 @@ def test_agent_confirmation_has_safe_voice_conversation_mode():
         assert marker in AGENT_HTML
     assert "continueVoiceConversation()" in AGENT_HTML
     assert "답변 전달" in AGENT_HTML
+
+
+def test_plan_uses_the_same_voice_conversation_mode():
+    assert AGENT_HTML.count('id="voiceConversation"') == 2
+    assert "stage.querySelector('#planRevision')" in AGENT_HTML
+    assert "if(currentStep===2)" in AGENT_HTML
+    assert "계획 읽어주기" not in AGENT_HTML
