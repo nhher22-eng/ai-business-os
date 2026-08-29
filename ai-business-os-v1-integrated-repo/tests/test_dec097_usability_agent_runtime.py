@@ -33,3 +33,13 @@ def test_agent_confirmation_repeats_until_user_confirms():
     ):
         assert marker in AGENT_HTML
     assert "confirmationReady?'<button class=\"btn next\">확인하고 계속</button>':''" in AGENT_HTML
+
+
+def test_agent_confirmation_has_safe_voice_conversation_mode():
+    for marker in (
+        "음성 대화", "toggleVoiceConversation", "continueVoiceConversation",
+        "latestAgentSpeech", "speechSynthesis.cancel()", "r.onerror",
+    ):
+        assert marker in AGENT_HTML
+    assert "continueVoiceConversation()" in AGENT_HTML
+    assert "답변 전달" in AGENT_HTML
