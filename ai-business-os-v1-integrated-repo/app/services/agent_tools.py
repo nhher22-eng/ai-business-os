@@ -21,7 +21,8 @@ from app.db.models import (
     ProductSKU,
     SalesChannelListing,
 )
-from app.db.product_registration import ProductRegistrationProfile
+from app.db.content_copy import ContentCopyAsset
+from app.db.product_registration import ProductRegistrationProfile, ProductSourceAsset
 from app.services.commerce_codes import create_sku
 from app.services.image_studio import media_root, save_reference_upload
 
@@ -41,6 +42,8 @@ TOOL_REGISTRY = {
     "detail_page": {"risk": "read", "approval": False, "label": "상세페이지 조회"},
     "category_products": {"risk": "read", "approval": False, "label": "카테고리 상품 조회"},
     "channel_status": {"risk": "read", "approval": False, "label": "판매채널 상태 조회"},
+    "product_full_detail": {"risk": "read", "approval": False, "label": "상품 통합정보 전체 조회"},
+    "product_section": {"risk": "read", "approval": False, "label": "상품 통합정보 영역 조회"},
     "product_image_add": {"risk": "internal_write", "approval": True, "label": "상품 이미지 추가"},
     "sku_add": {"risk": "internal_write", "approval": True, "label": "SKU 추가"},
 }
@@ -62,6 +65,11 @@ def infer_action(request_text: str, *, attachment_count: int = 0) -> str | None:
         return "product_image_add"
     if "카테고리" in text or ("모든상품" in text and "등록" in text):
         return "category_products"
+    if any(word in text for word in ("전체정보", "모든정보", "통합정보", "정보전체", "전체요약",
+                                     "전체데이터", "모든데이터")):
+        return "product_full_detail"
+    if any(word in text for word in ("가격재고배송", "재고배송정보", "매입가", "정상가", "가용재고", "안전재고", "입고예정", "보관위치")):
+        return "product_section"
     if "네이버" in text and any(word in text for word in ("등록", "연결", "판매")):
         return "channel_status"
     if "배송비" in text:
@@ -76,9 +84,25 @@ def infer_action(request_text: str, *, attachment_count: int = 0) -> str | None:
         return "image_list"
     if "상세페이지" in text:
         return "detail_page"
+    if _product_section(request_text):
+        return "product_section"
     if attachment_count:
         return "product_image_add"
     return None
+
+
+def _product_section(request_text: str) -> str | None:
+    text = normalize(request_text)
+    sections = (
+        ("description", ("상품설명", "특징", "장점", "제한사항", "추천용도", "사용방법", "주의사항")),
+        ("sku", ("옵션", "바코드", "판매단위")),
+        ("commerce", ("가격재고배송", "재고", "배송정보", "매입가", "정상가", "가용재고", "안전재고", "입고예정", "보관위치")),
+        ("assets", ("등록자료", "원본자료", "원본이미지", "첨부자료")),
+        ("content", ("판매콘텐츠", "콘텐츠진행", "문안", "제작상태")),
+        ("channels", ("판매채널", "채널연결", "쿠팡", "자사몰")),
+        ("info", ("상품정보", "기본정보", "브랜드", "모델명", "제조사", "원산지", "공급처", "재질", "중량", "규격", "인증", "구성품", "팩트")),
+    )
+    return next((key for key, words in sections if any(word in text for word in words)), None)
 
 
 def _intent_noise(action: str | None) -> set[str]:
@@ -91,6 +115,10 @@ def _intent_noise(action: str | None) -> set[str]:
         "image_list": {"등록이미지", "등록사진", "이미지", "사진"},
         "detail_page": {"상세페이지"},
         "channel_status": {"네이버", "상품등록", "등록"},
+        "product_full_detail": {"전체정보", "모든정보", "통합정보", "전체요약", "전체데이터", "모든데이터"},
+        "product_section": {"상품설명", "상품정보", "기본정보", "특징", "장점", "사용방법",
+                            "주의사항", "옵션", "가격", "재고", "배송", "등록자료", "판매콘텐츠",
+                            "판매채널", "연결상태", "진행상태", "알려"},
         "product_image_add": {"이미지", "사진", "추가", "등록"},
         "sku_add": {"sku", "추가", "판매금액", "판매가"},
     }
@@ -224,6 +252,8 @@ def build_plan(db: Session, *, tenant_id: str, workflow: str,
                 ]
     if action == "sku_add":
         plan["args"] = parse_sku_args(request_text)
+    elif action == "product_section":
+        plan["args"] = {"section": _product_section(request_text) or "info"}
     else:
         plan["args"] = {}
     return plan
@@ -263,6 +293,100 @@ def _images(db: Session, tenant_id: str, product_id: str) -> tuple[ProductRegist
     return profile, [by_id[item] for item in ids if item in by_id]
 
 
+def _integrated_product_sections(db: Session, *, tenant_id: str,
+                                 product: Product) -> list[dict[str, Any]]:
+    """Return the seven integrated-product tabs from stored first-party data."""
+    skus = list(db.scalars(select(ProductSKU).where(
+        ProductSKU.tenant_id == tenant_id,
+        ProductSKU.product_id == product.id,
+    ).order_by(ProductSKU.created_at)).all())
+    profile = db.scalar(select(ProductRegistrationProfile).where(
+        ProductRegistrationProfile.tenant_id == tenant_id,
+        ProductRegistrationProfile.product_id == product.id,
+    ))
+    operating = profile.operating_info or {} if profile else {}
+    marketing = profile.marketing_info or {} if profile else {}
+    images = list(db.scalars(select(ImageReferenceAsset).where(
+        ImageReferenceAsset.tenant_id == tenant_id,
+        ImageReferenceAsset.product_id == product.id,
+    ).order_by(ImageReferenceAsset.sort_order, ImageReferenceAsset.created_at)).all())
+    sources = list(db.scalars(select(ProductSourceAsset).where(
+        ProductSourceAsset.tenant_id == tenant_id,
+        ProductSourceAsset.product_id == product.id,
+    ).order_by(ProductSourceAsset.created_at.desc())).all())
+    detail_jobs = list(db.scalars(select(DetailPageJob).where(
+        DetailPageJob.tenant_id == tenant_id,
+        DetailPageJob.product_id == product.id,
+    ).order_by(DetailPageJob.updated_at.desc())).all())
+    copies = list(db.scalars(select(ContentCopyAsset).where(
+        ContentCopyAsset.tenant_id == tenant_id,
+        ContentCopyAsset.product_id == product.id,
+    ).order_by(ContentCopyAsset.updated_at.desc())).all())
+    listings = list(db.scalars(select(SalesChannelListing).where(
+        SalesChannelListing.tenant_id == tenant_id,
+        SalesChannelListing.product_id == product.id,
+    ).order_by(SalesChannelListing.channel, SalesChannelListing.created_at)).all())
+    sku_by_id = {row.id: row for row in skus}
+    components = (profile.packaging or {}).get("components", []) if profile else []
+    section_map = [
+        {"key": "info", "label": "상품정보", "fields": {
+            "상품코드": product.product_code, "상품명": product.name, "상태": product.status,
+            "카테고리": product.category, "브랜드": product.brand,
+            "모델명": product.model_name or (profile.model_name if profile else None),
+            "제조사": product.manufacturer or (profile.manufacturer if profile else None),
+            "원산지": product.country_of_origin or (profile.country_of_origin if profile else None),
+            "공급처": product.supplier_name,
+            "주재질": profile.primary_material if profile else None,
+            "부재질": profile.secondary_material if profile else None,
+            "중량": profile.weight if profile else None,
+            "규격": profile.dimensions if profile else None,
+            "인증": profile.certifications if profile else None,
+            "구성품": components, "FACT 메모": profile.fact_notes if profile else None,
+            "FACT 확정": bool(profile and profile.facts_confirmed),
+        }},
+        {"key": "description", "label": "상품설명", "fields": {
+            "기본 설명": product.description,
+            "특징": marketing.get("features"), "장점": marketing.get("selling_points"),
+            "제한사항": marketing.get("limitations"), "추천 용도": operating.get("usage"),
+            "사용방법": operating.get("usage_instructions"),
+            "주의사항": marketing.get("product_notes"),
+        }},
+        {"key": "sku", "label": "옵션·SKU", "items": [{
+            "SKU 코드": row.sku_code, "SKU명": row.name, "옵션": row.option_value,
+            "바코드": row.barcode, "판매단위": row.sales_unit, "상태": row.status,
+        } for row in skus]},
+        {"key": "commerce", "label": "가격·재고·배송", "items": [{
+            "SKU 코드": row.sku_code, "SKU명": row.name, "매입가": row.purchase_cost,
+            "정상가": row.list_price, "판매가": row.sale_price,
+            "현재고": row.current_stock, "가용재고": row.available_stock,
+            "안전재고": row.safety_stock, "입고예정": row.incoming_stock,
+            "보관위치": row.storage_location, "배송비": row.shipping_fee,
+        } for row in skus]},
+        {"key": "assets", "label": "등록자료", "items": ([{
+            "종류": "원본 자료", "파일명": row.original_filename,
+            "자료 유형": row.source_kind, "크기(byte)": row.size_bytes, "메모": row.note,
+        } for row in sources] + [{
+            "종류": "등록 이미지", "파일명": row.original_filename,
+            "역할": row.asset_role, "잠금": row.lock_level,
+        } for row in images])},
+        {"key": "content", "label": "판매콘텐츠", "items": ([{
+            "종류": "상세페이지", "채널": row.channel, "상태": row.status,
+            "현재 버전": row.current_version_no, "승인 버전": row.approved_version_no,
+        } for row in detail_jobs] + [{
+            "종류": "승인 문안", "위치": row.slot_label, "내용": row.content,
+            "상태": row.status, "버전": row.version_no,
+        } for row in copies])},
+        {"key": "channels", "label": "판매채널", "items": [{
+            "채널": row.channel, "SKU": sku_by_id.get(row.sku_id).sku_code if sku_by_id.get(row.sku_id) else row.sku_id,
+            "내부 상태": row.status, "외부 상품번호": row.external_product_id,
+            "외부 SKU번호": row.external_sku_id, "채널 상품명": row.channel_product_name,
+            "채널 가격": row.channel_price,
+            "마지막 동기화": row.last_synced_at.isoformat() if row.last_synced_at else None,
+        } for row in listings]},
+    ]
+    return section_map
+
+
 def _query_result(db: Session, payload: dict[str, Any], product: Product | None) -> dict[str, Any]:
     action = payload["action"]
     tenant_id = payload["tenant_id"]
@@ -278,7 +402,16 @@ def _query_result(db: Session, payload: dict[str, Any], product: Product | None)
     skus = _skus(db, tenant_id, product.id)
     base = {"verified": True, "actual_change": False, "action": action,
             "product": {"id": product.id, "name": product.name, "product_code": product.product_code}}
-    if action == "product_price":
+    if action in {"product_full_detail", "product_section"}:
+        sections = _integrated_product_sections(db, tenant_id=tenant_id, product=product)
+        requested = "all" if action == "product_full_detail" else (payload.get("args") or {}).get("section", "info")
+        base["requested_section"] = requested
+        base["sections"] = sections if requested == "all" else [
+            section for section in sections if section["key"] == requested
+        ]
+        base["live_marketplace_verified"] = False
+        base["notice"] = "상품별 통합관리에 저장된 내부 정보입니다. 미등록 값은 미등록으로 표시하며, 판매채널의 실시간 외부 상태는 별도 API 확인이 필요합니다."
+    elif action == "product_price":
         base["skus"] = [{"sku_code": s.sku_code, "name": s.name, "sale_price": s.sale_price} for s in skus]
     elif action == "shipping_fee":
         base["skus"] = [{"sku_code": s.sku_code, "name": s.name, "shipping_fee": s.shipping_fee} for s in skus]
