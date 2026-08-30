@@ -2,9 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - "vnext-*"
   pull_request:
-    branches: [main]
+    branches:
+      - main
+      - "vnext-*"
 
 permissions:
   contents: read

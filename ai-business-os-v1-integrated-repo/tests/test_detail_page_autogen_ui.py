@@ -1,0 +1,74 @@
+from app.detail_page_autogen_ui_patch import inject_autogen_ui
+from app.detail_page_ui import HTML
+
+
+def test_autogen_ui_injection_adds_primary_control_and_endpoint():
+    patched = inject_autogen_ui(HTML)
+    assert 'id="autogenBtn"' in patched
+    assert '상세페이지 자동생성' in patched
+    assert '/api/v1/detail-page-autogen/generate' in patched
+    assert '수동 제작으로 시작' in patched
+
+
+def test_autogen_ui_injection_is_idempotent():
+    once = inject_autogen_ui(HTML)
+    twice = inject_autogen_ui(once)
+    assert twice == once
+
+
+def test_autogen_ui_keeps_human_approval_controls():
+    patched = inject_autogen_ui(HTML)
+    assert '최종 승인' in patched
+    assert 'Canva 전달 패키지' in patched
+
+
+def test_repotting_mat_fact_editor_is_available_without_guessing_values():
+    patched = inject_autogen_ui(HTML)
+    assert '분갈이 매트 테스트 상품 준비' in patched
+    assert "product_code:'REPOTTING-MAT'" in patched
+    assert "name:'분갈이 매트'" in patched
+    assert '확정 FACT 저장' in patched
+    assert '/api/v1/business/product-detail' in patched
+    assert '모르는 값은 비워두세요' in patched
+
+
+def test_fact_editor_reuses_existing_product_and_rechecks_autogen():
+    patched = inject_autogen_ui(HTML)
+    assert "p.product_code==='REPOTTING-MAT'||p.name==='분갈이 매트'" in patched
+    assert '저장 후 상세페이지 자동생성을 다시 실행' in patched
+    assert 'FACT 보완 필요' in patched
+
+
+def test_fact_editor_binds_loaded_facts_to_selected_product():
+    patched = inject_autogen_ui(HTML)
+    assert 'let factEditorProductId=null;' in patched
+    assert 'let factLoadSerial=0;' in patched
+    assert 'serial!==factLoadSerial||product.value!==row.id' in patched
+    assert 'factEditorProductId=row.id;' in patched
+
+
+def test_fact_editor_blocks_cross_product_save_after_selection_change():
+    patched = inject_autogen_ui(HTML)
+    assert 'if(factEditorProductId!==row.id)' in patched
+    assert '상품 선택이 변경되어 저장을 차단했습니다.' in patched
+    assert '현재 상품 FACT를 다시 불러옵니다.' in patched
+
+
+def test_product_change_clears_old_fact_fields_before_loading_new_product():
+    patched = inject_autogen_ui(HTML)
+    assert 'clearFactEditorFields();' in patched
+    assert "product.addEventListener('change',()=>loadFactEditor().catch(()=>{}))" in patched
+
+
+def test_fact_editor_always_shows_current_product_name():
+    patched = inject_autogen_ui(HTML)
+    assert 'id="factEditorProductLabel"' in patched
+    assert '현재 편집 상품:' in patched
+    assert "label.textContent=`현재 편집 상품: ${row?row.name:'선택 없음'}`" in patched
+
+
+def test_repotting_setup_button_is_hidden_after_product_exists():
+    patched = inject_autogen_ui(HTML)
+    assert 'style="display:none"' in patched
+    assert 'function repottingProductExists()' in patched
+    assert "setup.style.display=repottingProductExists()?'none':'block'" in patched

@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+set -u
+
+GIT_ROOT="${AIOS_GIT_ROOT:-$HOME/ai-business-os}"
+ROOT="${AIOS_ROOT:-$GIT_ROOT/ai-business-os-v1-integrated-repo}"
+MODE="${1:-full}"
+PASS=0
+WARN=0
+FAIL=0
+
+ok() { PASS=$((PASS + 1)); printf '[정상] %s\n' "$*"; }
+warn() { WARN=$((WARN + 1)); printf '[주의] %s\n' "$*"; }
+fail() { FAIL=$((FAIL + 1)); printf '[실패] %s\n' "$*"; }
+
+printf 'AI Business OS 시스템 진단\n'
+printf '실행시각: %s\n' "$(date '+%Y-%m-%d %H:%M:%S %Z')"
+printf '진단모드: %s\n\n' "$MODE"
+
+if [[ ! -d "$GIT_ROOT/.git" && ! -f "$GIT_ROOT/.git" ]]; then
+  fail "Git 저장소를 찾지 못했습니다: $GIT_ROOT"
+  printf '\n작업 진행 가능 여부: 중단\n'
+  printf '다음 행동: AIOS_ROOT를 저장소 경로로 지정하거나 EC2 저장소를 복구하세요.\n'
+  exit 2
+fi
+
+if [[ ! -f "$ROOT/docker-compose.yml" ]]; then
+  fail "AI Business OS 실행 폴더를 찾지 못했습니다: $ROOT"
+  printf '\n작업 진행 가능 여부: 중단\n'
+  printf '다음 행동: AIOS_ROOT를 docker-compose.yml이 있는 경로로 지정하세요.\n'
+  exit 2
+fi
+
+cd "$GIT_ROOT"
+ok "저장소 접근"
+
+BRANCH="$(git branch --show-current 2>/dev/null || true)"
+COMMIT="$(git rev-parse --short HEAD 2>/dev/null || true)"
+if [[ -n "$BRANCH" && -n "$COMMIT" ]]; then
+  ok "Git 기준점: ${BRANCH} @ ${COMMIT}"
+else
+  fail "현재 Git 브랜치 또는 커밋을 확인하지 못했습니다."
+fi
+
+TRACKED="$(git status --porcelain --untracked-files=no 2>/dev/null | wc -l | tr -d ' ')"
+UNTRACKED="$(git status --porcelain 2>/dev/null | awk '$1 == "??" {count++} END {print count+0}')"
+if [[ "$TRACKED" == "0" ]]; then
+  ok "추적 파일 변경 없음"
+else
+  warn "커밋되지 않은 추적 파일 ${TRACKED}개"
+fi
+if [[ "$UNTRACKED" == "0" ]]; then
+  ok "미추적 파일 없음"
+else
+  warn "미추적 파일 ${UNTRACKED}개 — 백업 파일인지 확인 필요"
+fi
+
+if command -v timeout >/dev/null 2>&1 && [[ -n "$BRANCH" ]]; then
+  if GIT_TERMINAL_PROMPT=0 timeout 20 git ls-remote --exit-code origin "refs/heads/$BRANCH" >/dev/null 2>&1; then
+    ok "GitHub 읽기 가능"
+  elif GIT_TERMINAL_PROMPT=0 timeout 20 git ls-remote origin HEAD >/dev/null 2>&1; then
+    ok "GitHub 읽기 가능 — 현재 브랜치는 아직 원격에 없음"
+  else
+    warn "GitHub 읽기 확인 실패 — 네트워크 또는 인증 확인 필요"
+  fi
+
+  if GIT_TERMINAL_PROMPT=0 timeout 20 git push --dry-run origin "HEAD:refs/heads/$BRANCH" >/dev/null 2>&1; then
+    ok "GitHub 쓰기 인증 가능(dry-run)"
+  else
+    warn "GitHub 쓰기 인증 불가 — EC2 SSH 경로 또는 GitHub 연결을 사용하세요"
+  fi
+else
+  warn "GitHub 자동점검 생략 — timeout 명령 또는 현재 브랜치 없음"
+fi
+
+cd "$ROOT"
+if ! command -v docker >/dev/null 2>&1; then
+  fail "Docker 명령을 찾지 못했습니다."
+elif ! docker compose version >/dev/null 2>&1; then
+  fail "Docker Compose를 사용할 수 없습니다."
+elif ! docker compose config --quiet >/dev/null 2>&1; then
+  fail "docker-compose.yml 또는 .env 구성이 유효하지 않습니다."
+else
+  ok "Docker Compose 구성 정상"
+  EXPECTED=(api postgres redis scheduler worker image_worker)
+  for service in "${EXPECTED[@]}"; do
+    STATUS="$(docker compose ps --status running --services 2>/dev/null | grep -Fx "$service" || true)"
+    if [[ "$STATUS" == "$service" ]]; then
+      ok "서비스 실행 중: $service"
+    else
+      fail "서비스 중지 또는 누락: $service"
+    fi
+  done
+fi
+
+if command -v curl >/dev/null 2>&1; then
+  LIVE="$(curl -fsS --max-time 5 http://127.0.0.1:8000/health/live 2>/dev/null || true)"
+  READY="$(curl -fsS --max-time 5 http://127.0.0.1:8000/health/ready 2>/dev/null || true)"
+  [[ "$LIVE" == *'"status":"ok"'* ]] && ok "API 생존 확인" || fail "API 생존 확인 실패"
+  if [[ "$READY" == *'"status":"ok"'* && "$READY" == *'"postgres":"ok"'* && "$READY" == *'"redis":"ok"'* ]]; then
+    ok "API 준비 완료: PostgreSQL·Redis 정상"
+  else
+    fail "API 준비 확인 실패 — PostgreSQL·Redis 상태를 확인하세요"
+  fi
+else
+  fail "curl 명령을 찾지 못했습니다."
+fi
+
+BACKUP_DIR="${AIOS_BACKUP_DIR:-$ROOT/backups}"
+LATEST="$(find "$BACKUP_DIR" -maxdepth 1 -type f -name '*.dump' -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2- || true)"
+if [[ -z "$LATEST" ]]; then
+  warn "PostgreSQL 백업을 찾지 못했습니다: $BACKUP_DIR"
+else
+  AGE_HOURS=$(( ( $(date +%s) - $(stat -c %Y "$LATEST") ) / 3600 ))
+  if [[ "$AGE_HOURS" -le 26 ]]; then
+    ok "최근 PostgreSQL 백업: ${AGE_HOURS}시간 전"
+  else
+    warn "PostgreSQL 백업이 오래됨: ${AGE_HOURS}시간 전"
+  fi
+  if [[ -f "${LATEST}.sha256" ]] && (cd "$(dirname "$LATEST")" && sha256sum -c "$(basename "${LATEST}.sha256")" >/dev/null 2>&1); then
+    ok "최신 백업 무결성 정상"
+  else
+    warn "최신 백업 무결성 파일이 없거나 검증 실패"
+  fi
+fi
+
+DISK_USED="$(df -P "$ROOT" | awk 'NR==2 {gsub(/%/,"",$5); print $5}')"
+if [[ -n "$DISK_USED" && "$DISK_USED" -lt 85 ]]; then
+  ok "디스크 사용률 ${DISK_USED}%"
+else
+  warn "디스크 사용률 ${DISK_USED:-확인불가}% — 정리 필요"
+fi
+
+printf '\n진단 요약: 정상 %d · 주의 %d · 실패 %d\n' "$PASS" "$WARN" "$FAIL"
+if [[ "$FAIL" -gt 0 ]]; then
+  printf '작업 진행 가능 여부: 중단\n'
+  printf '다음 행동: 실패 항목부터 확인하고 운영 변경·배포를 중지하세요.\n'
+  exit 2
+elif [[ "$WARN" -gt 0 ]]; then
+  printf '작업 진행 가능 여부: 주의 후 가능\n'
+  printf '다음 행동: 주의 항목의 대체 경로를 확인한 뒤 작업하세요.\n'
+  exit 1
+else
+  printf '작업 진행 가능 여부: 가능\n'
+  printf '다음 행동: 기준 브랜치와 커밋을 기록하고 작업을 시작하세요.\n'
+fi

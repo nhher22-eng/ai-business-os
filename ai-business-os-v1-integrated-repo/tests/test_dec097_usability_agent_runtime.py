@@ -1,0 +1,52 @@
+from app.agent_work_ui import HTML as AGENT_HTML
+from app.product_detail_v2_ui import DETAIL_HTML_V2
+from app.product_registration_simple_ui import HTML as REGISTRATION_HTML
+
+
+def test_registration_files_accumulate_across_multiple_selections():
+    assert "selectedImages" in REGISTRATION_HTML
+    assert "selectedDocuments" in REGISTRATION_HTML
+    assert "addUnique(selectedImages" in REGISTRATION_HTML
+    assert "$('images').value=''" in REGISTRATION_HTML
+
+
+def test_product_detail_has_additive_images_and_inactive_sku_filter():
+    assert "＋ 이미지 추가" in DETAIL_HTML_V2
+    assert "pendingAssetFiles" in DETAIL_HTML_V2
+    assert "multiple hidden" in DETAIL_HTML_V2
+    assert "activeSkuEntries" in DETAIL_HTML_V2
+    assert "deleteSku(" in DETAIL_HTML_V2
+
+
+def test_agent_workspace_uses_real_run_api_and_ordered_steps():
+    assert "직접 입력하기" not in AGENT_HTML
+    assert "계획 수정 요청" in AGENT_HTML
+    assert "'/api/v1/agent-tools/execute'" in AGENT_HTML
+    assert "if(n>maxStep)return" in AGENT_HTML
+    assert "배포 전 UI 구현본" not in AGENT_HTML
+
+
+def test_agent_confirmation_repeats_until_user_confirms():
+    for marker in (
+        "답변 전달", "sendConfirmationAnswer", "confirmationMessages",
+        "confirmationReady", "확인하고 계속", "추가사항 없음",
+    ):
+        assert marker in AGENT_HTML
+    assert "confirmationReady?'<button class=\"btn next\">확인하고 계속</button>':''" in AGENT_HTML
+
+
+def test_agent_confirmation_has_safe_voice_conversation_mode():
+    for marker in (
+        "음성 대화", "toggleVoiceConversation", "continueVoiceConversation",
+        "latestAgentSpeech", "speechSynthesis.cancel()", "r.onerror",
+    ):
+        assert marker in AGENT_HTML
+    assert "continueVoiceConversation()" in AGENT_HTML
+    assert "답변 전달" in AGENT_HTML
+
+
+def test_plan_uses_the_same_voice_conversation_mode():
+    assert AGENT_HTML.count('id="voiceConversation"') == 2
+    assert "stage.querySelector('#planRevision')" in AGENT_HTML
+    assert "if(currentStep===2)" in AGENT_HTML
+    assert "계획 읽어주기" not in AGENT_HTML

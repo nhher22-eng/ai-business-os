@@ -5,10 +5,140 @@ import redis
 from app.core.config import settings
 from app.db.session import engine
 from app.api.runs import router as runs_router
+from app.api.operations import router as operations_router
+from app.api.business import router as business_router
+from app.api.dashboard_session import router as dashboard_session_router
+from app.api.images import router as images_router
+from app.api.detail_pages import router as detail_pages_router
+from app.api.detail_page_templates import router as detail_page_templates_router
+from app.api.detail_page_autogen import router as detail_page_autogen_router
+from app.api.detail_page_content_basis import router as detail_page_content_basis_router
+from app.api.canva_controlled_export import router as canva_controlled_export_router
+from app.api.product_registration import router as product_registration_router
+from app.api.product_registration_recent import router as product_registration_recent_router
+from app.api.product_registration_assets import router as product_registration_assets_router
+from app.api.product_registration_readiness import router as product_registration_readiness_router
+from app.api.product_image_planning import router as product_image_planning_router
+from app.api.product_image_fact_async import router as product_image_fact_async_router
+from app.api.product_image_facts import router as product_image_facts_router
+from app.api.product_overview import router as product_overview_router
+from app.api.product_operations import router as product_operations_router
+from app.api.content_copy import router as content_copy_router
+from app.api.image_asset_workflows import router as image_asset_workflows_router
+from app.api.google_drive import router as google_drive_router
+from app.api.canva_integration import router as canva_integration_router
+from app.api.commerce_catalog import router as commerce_catalog_router
+from app.commerce_catalog_ui import router as commerce_catalog_ui_router
+from app.google_drive_ui import router as google_drive_ui_router
+from app.dashboard_ui import router as dashboard_ui_router
+from app.operations_ui import router as operations_ui_router
+from app.image_studio_ui import router as image_studio_ui_router
+from app.product_overview_ui import router as product_overview_ui_router, inject_product_overview_link
+from app.detail_page_template_ui import router as detail_page_template_ui_router
+from app import dashboard_ui, detail_page_ui, product_registration_ui
+from app.workflow_ui import router as workflow_ui_router
+from app.unified_tool_ui import router as unified_tool_ui_router
+from app.dashboard_product_work_ui_patch import inject_dashboard_product_work
+from app.detail_page_autogen_ui_patch import inject_autogen_ui
+from app.detail_page_content_basis_ui_patch import inject_detail_page_content_basis_editor
+from app.detail_page_product_selection_ui_patch import inject_detail_page_product_selection
+from app.product_registration_ui import (
+    inject_product_registration_link,
+    router as product_registration_ui_router,
+)
+from app.product_registration_resume_ui_patch import inject_product_registration_resume
+from app.product_registration_image_restore_ui_patch import inject_product_image_restore
+from app.product_content_basis_ui_patch import inject_product_content_basis_editor
+from app.product_management_ui_patch import inject_product_management_mode
+from app.product_operations_ui_patch import inject_product_operations_ui
+from app.product_image_fact_ui_patch import inject_product_image_fact_ui
+from app.product_registration_async_restore_ui_patch import inject_async_restore_ui
+from app.product_image_planning_ui_patch import inject_product_image_planning_ui
+from app.product_registration_readiness_ui_patch import inject_product_registration_readiness_ui
+from app.product_registration_v2_ui_patch import inject_product_registration_v2
+from app.services.fact_grounded_copy_patch import install_fact_grounded_copy_patch
+from app.services.product_master_integration_patch import install_product_master_integration_patch
+from app.services.product_master_release_gate_patch import install_product_master_release_gate
+from app.services.product_registration_safety_patch import install_product_registration_safety_patch
+from app.services.product_image_fact_oom_patch import install_product_image_fact_oom_patch
+from app.services.product_image_final_policy_patch import install_product_image_final_policy_patch
 from app.services.queue import queue_depth
+from app.agent_work_ui import router as agent_work_ui_router
+from app.api.agent_tools import router as agent_tools_router
+from app.api.service_management import router as service_management_router
+from app.service_management_ui import router as service_management_ui_router
+from app.global_navigation import GlobalNavigationMiddleware
 
-app = FastAPI(title=settings.app_name, version="1.0.0")
+
+install_fact_grounded_copy_patch()
+install_product_master_integration_patch()
+install_product_master_release_gate()
+install_product_registration_safety_patch()
+install_product_image_fact_oom_patch()
+install_product_image_final_policy_patch()
+detail_page_ui.HTML = inject_autogen_ui(detail_page_ui.HTML)
+detail_page_ui.HTML = inject_detail_page_content_basis_editor(detail_page_ui.HTML)
+detail_page_ui.HTML = inject_detail_page_product_selection(detail_page_ui.HTML)
+dashboard_ui.HTML = inject_product_registration_link(dashboard_ui.HTML)
+dashboard_ui.HTML = inject_product_overview_link(dashboard_ui.HTML)
+dashboard_ui.HTML = inject_dashboard_product_work(dashboard_ui.HTML)
+product_registration_ui.HTML = inject_product_registration_resume(product_registration_ui.HTML)
+product_registration_ui.HTML = inject_product_image_restore(product_registration_ui.HTML)
+product_registration_ui.HTML = inject_product_content_basis_editor(product_registration_ui.HTML)
+product_registration_ui.HTML = inject_product_management_mode(product_registration_ui.HTML)
+product_registration_ui.HTML = inject_product_operations_ui(product_registration_ui.HTML)
+product_registration_ui.HTML = inject_product_image_fact_ui(product_registration_ui.HTML)
+product_registration_ui.HTML = inject_async_restore_ui(product_registration_ui.HTML)
+product_registration_ui.HTML = inject_product_image_planning_ui(product_registration_ui.HTML)
+product_registration_ui.HTML = inject_product_registration_readiness_ui(product_registration_ui.HTML)
+product_registration_ui.HTML = inject_product_registration_v2(product_registration_ui.HTML)
+
+app = FastAPI(
+    title=settings.app_name,
+    version="1.0.0",
+)
+app.add_middleware(GlobalNavigationMiddleware)
+
 app.include_router(runs_router)
+app.include_router(operations_router)
+app.include_router(dashboard_ui_router)
+app.include_router(business_router)
+app.include_router(product_registration_router)
+app.include_router(product_registration_recent_router)
+app.include_router(product_registration_assets_router)
+app.include_router(product_registration_readiness_router)
+app.include_router(product_image_planning_router)
+app.include_router(product_image_fact_async_router)
+app.include_router(product_image_facts_router)
+app.include_router(product_overview_router)
+app.include_router(product_operations_router)
+app.include_router(content_copy_router)
+app.include_router(image_asset_workflows_router)
+app.include_router(google_drive_router)
+app.include_router(canva_integration_router)
+app.include_router(commerce_catalog_router)
+app.include_router(commerce_catalog_ui_router)
+app.include_router(google_drive_ui_router)
+app.include_router(dashboard_session_router)
+app.include_router(operations_ui_router)
+app.include_router(images_router)
+app.include_router(detail_pages_router)
+app.include_router(detail_page_templates_router)
+app.include_router(detail_page_autogen_router)
+app.include_router(detail_page_content_basis_router)
+app.include_router(canva_controlled_export_router)
+app.include_router(image_studio_ui_router)
+app.include_router(product_overview_ui_router)
+app.include_router(product_registration_ui_router)
+app.include_router(detail_page_ui.router)
+app.include_router(detail_page_template_ui_router)
+app.include_router(workflow_ui_router)
+app.include_router(unified_tool_ui_router)
+app.include_router(agent_work_ui_router)
+app.include_router(agent_tools_router)
+app.include_router(service_management_router)
+app.include_router(service_management_ui_router)
+
 
 @app.get("/")
 def root():
@@ -17,15 +147,21 @@ def root():
         "version": "1.0.0",
         "status": "running",
         "docs": "/docs",
+        "operations": "/operations",
+        "business_home": "/business-home",
+        "service_management": "/service-management",
     }
+
 
 @app.get("/health/live")
 def live():
     return {"status": "ok"}
 
+
 @app.get("/health/ready")
 def ready():
     checks = {}
+
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
@@ -40,4 +176,9 @@ def ready():
         checks["redis"] = f"error: {type(exc).__name__}"
 
     status = "ok" if all(v == "ok" for v in checks.values()) else "degraded"
-    return {"status": status, "checks": checks, "queue_depth": queue_depth() if checks.get("redis") == "ok" else None}
+
+    return {
+        "status": status,
+        "checks": checks,
+        "queue_depth": queue_depth() if checks.get("redis") == "ok" else None,
+    }
