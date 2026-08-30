@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.api.dashboard_session import require_business_auth
 from app.core.config import settings
 from app.db.google_drive import GoogleDriveConnection
+from app.db.canva import CanvaConnection
 from app.db.models import LEGACY_TENANT_ID
 from app.db.service_management import ServiceManagementSetting
 from app.db.session import SessionLocal
@@ -51,6 +52,14 @@ SERVICE_CATALOG = {
         "usage_url": "https://one.google.com/storage",
         "reauth_url": "/google-drive",
         "features": ["상품 원본 이미지", "등록 문서", "상품별 자산 폴더", "Agent 첨부자료"],
+    },
+    "canva": {
+        "name": "Canva", "purpose": "상세페이지 템플릿·이미지·Autofill 생성", "icon": "layout",
+        "management_url": "https://www.canva.com/developers/integrations",
+        "billing_url": "https://www.canva.com/settings/billing-and-plans",
+        "usage_url": "https://www.canva.com/projects",
+        "reauth_url": "#connect-canva",
+        "features": ["v1.2 브랜드 템플릿", "승인 이미지 업로드", "94필드 Autofill", "생성 디자인 확인"],
     },
     "github": {
         "name": "GitHub", "purpose": "코드 저장·배포 이력", "icon": "git-branch",
@@ -149,6 +158,18 @@ def _automatic_state(db: Session, tenant_id: str, code: str) -> dict:
             "auth_status": "renew" if expired_without_refresh else ("registered" if connected else "missing"),
             "auth_label": "OAuth 재인증 필요" if expired_without_refresh else ("OAuth 등록됨" if connected else "OAuth 미연결"),
             "check_method": "OAuth 상태 자동 확인",
+        }
+    if code == "canva":
+        row = db.scalar(select(CanvaConnection).where(CanvaConnection.tenant_id == tenant_id))
+        configured = bool(settings.canva_client_id and settings.canva_client_secret)
+        connected = bool(configured and row and row.status == "connected")
+        renewal = bool(row and row.status == "reauthorization_required")
+        return {
+            "connection_status": "attention" if renewal else ("normal" if connected else "not_connected"),
+            "connection_label": "재인증 필요" if renewal else ("연결됨" if connected else ("앱 설정 필요" if not configured else "미연결")),
+            "auth_status": "renew" if renewal else ("registered" if connected else "missing"),
+            "auth_label": "OAuth 재인증 필요" if renewal else ("OAuth 등록됨" if connected else "OAuth 미연결"),
+            "check_method": "OAuth·PKCE 상태 자동 확인",
         }
     if code == "market_research":
         return {"connection_status": "not_connected", "connection_label": "도입 전",

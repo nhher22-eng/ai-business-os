@@ -12,6 +12,7 @@ from app.api.dashboard_session import require_business_auth
 from app.api.service_management import get_db, router as service_management_router
 from app.core.config import settings
 from app.db.google_drive import GoogleDriveConnection
+from app.db.canva import CanvaConnection
 from app.db.models import Base
 from app.global_navigation import NAV_CONTENT
 from app.service_management_ui import HTML, router as service_management_ui_router
@@ -50,10 +51,12 @@ def test_service_management_reports_real_configuration_without_secrets(monkeypat
         response = client.get("/api/v1/service-management/services")
         assert response.status_code == 200
         payload = response.json()
-        assert payload["summary"]["service_count"] == 8
+        assert payload["summary"]["service_count"] == 9
         by_code = {row["code"]: row for row in payload["services"]}
         assert by_code["openai"]["connection_label"] == "API 설정됨"
         assert by_code["google_drive"]["connection_label"] == "연결됨"
+        assert by_code["canva"]["connection_label"] in {"앱 설정 필요", "미연결"}
+        assert by_code["canva"]["reauth_url"] == "#connect-canva"
         assert by_code["market_research"]["connection_label"] == "도입 전"
         assert by_code["openai"]["secrets_exposed"] is False
         assert "configured-but-never-returned" not in response.text
@@ -119,6 +122,8 @@ def test_ui_matches_approved_visual_and_official_handoff_boundary():
     assert "결제와 요금제 변경은 Agent가 수행하지 않으며" in HTML
     assert 'rel="noopener noreferrer"' in HTML
     assert 'href="/service-management"' in NAV_CONTENT
+    assert "/api/v1/integrations/canva/connect" in HTML
+    assert "method:'POST'" in HTML
 
 
 def test_service_management_migration_follows_current_head():

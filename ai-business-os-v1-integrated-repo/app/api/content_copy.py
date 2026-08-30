@@ -13,6 +13,8 @@ from app.db.content_copy import ContentCopyAsset
 from app.db.models import Product
 from app.db.product_registration import ProductRegistrationProfile
 from app.db.session import SessionLocal
+from app.services.canva_v12_text_export import CANVA_V12_COPY_FIELDS
+from app.services.canva_v12_copy_ai import generate_canva_v12_copy_candidates
 
 
 router = APIRouter(
@@ -47,6 +49,9 @@ TARGET_SLOTS = {
         ("installation", "설치 방법"),
         ("usage", "사용 방법"),
         ("caution", "주의사항"),
+    ],
+    "canva_v12": [
+        (field_name, field_name) for field_name in CANVA_V12_COPY_FIELDS
     ],
 }
 
@@ -128,12 +133,18 @@ def _candidate(slot_key: str, facts: dict) -> tuple[str, list[str], str]:
         "installation": (_text(facts["installation"]), ["operating_info.installation_method"], "fact_substitution"),
         "caution": (_text(facts["caution"]), ["operating_info.cautions", "fact_notes"], "fact_substitution"),
         "cta": ("상품 정보를 확인해 보세요.", [], "system_default"),
+        "hero_headline": (features or name, ["marketing_info.features"] if features else ["product.name"], "fact_substitution"),
+        "hero_subcopy": (usage or _text(facts["description"]), ["operating_info.usage"] if usage else ["product.description"], "fact_substitution"),
+        "features_section_subcopy": (features, ["marketing_info.features"], "fact_substitution"),
+        "usage_scene_section_subcopy": (usage, ["operating_info.usage"], "fact_substitution"),
+        "spec_section_subcopy": (" · ".join(v for v in (dimensions, material) if v), ["dimensions", "primary_material"], "fact_substitution"),
+        "caution_section_subcopy": (_text(facts["caution"]), ["operating_info.cautions", "fact_notes"], "fact_substitution"),
     }
     return mapping.get(slot_key, ("", [], "fact_substitution"))
 
 
 class SaveCandidateBody(BaseModel):
-    target_type: Literal["detail_page", "catalog", "advertisement", "manual"]
+    target_type: Literal["detail_page", "catalog", "advertisement", "manual", "canva_v12"]
     slot_key: str = Field(min_length=1, max_length=80)
     content: str = Field(min_length=1, max_length=5000)
     source_fact_keys: list[str] = []
@@ -143,6 +154,10 @@ class SaveCandidateBody(BaseModel):
 class ApprovalBody(BaseModel):
     approved: bool = True
     approved_by: str = Field(default="dashboard-user", min_length=1, max_length=128)
+
+
+class CanvaV12AIProposalBody(BaseModel):
+    execution_approved: bool = False
 
 
 @router.get("/requirements")
@@ -178,6 +193,44 @@ def candidates(
             }
             for key, label in slots
         ],
+    }
+
+
+@router.post("/products/{product_id}/canva-v12/ai-candidates")
+def canva_v12_ai_candidates(
+    product_id: str,
+    body: CanvaV12AIProposalBody,
+    tenant_id: str = Query(..., min_length=1, max_length=128),
+    db: Session = Depends(get_db),
+):
+    if not body.execution_approved:
+        raise HTTPException(409, detail="AI 문안 후보 생성 실행 승인이 필요합니다.")
+    product, profile = _product_and_profile(db, tenant_id, product_id)
+    facts = _facts(product, profile)
+    approved_rows = list(
+        db.scalars(
+            select(ContentCopyAsset).where(
+                ContentCopyAsset.product_id == product_id,
+                ContentCopyAsset.tenant_id == tenant_id,
+                ContentCopyAsset.status == "approved",
+            ).order_by(ContentCopyAsset.updated_at.desc())
+        ).all()
+    )
+    approved: dict[str, str] = {}
+    for row in approved_rows:
+        approved.setdefault(row.slot_key, row.content)
+    proposals, meta = generate_canva_v12_copy_candidates(
+        product_name=product.name,
+        confirmed_facts=facts,
+        approved_copy=approved,
+    )
+    return {
+        "proposals": proposals,
+        "proposal_count": len(proposals),
+        "requires_human_review": True,
+        "saved": False,
+        "approved": False,
+        "meta": meta,
     }
 
 

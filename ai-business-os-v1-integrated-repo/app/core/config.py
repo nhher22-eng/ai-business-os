@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     google_picker_api_key: str = ""
     google_picker_app_id: str = ""
 
+    canva_client_id: str = ""
+    canva_client_secret: str = ""
+    canva_redirect_uri: str = "https://os.gardenfarm.kr/api/v1/integrations/canva/callback"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore",
